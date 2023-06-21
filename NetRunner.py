@@ -315,25 +315,37 @@ class NetRunnerServer:
         - more system info (date, system, stats, cpu_info, printers)
         """
         response = "============ %20s ================\n" % ("SYSTEM INFORMATION".center(20))
-        response += "%20s:  %20s\n" % ("UNAME".center(20), "".join(platform.uname()))
+
+        # OS information
+        response += "%20s:  %20s\n" % ("OS information".center(20), "".join(platform.uname()))
 
         # checking writable paths in $PATH
-        response += "%20s:  %20s\n" % ("$PATH".center(20), ":".join(os.get_exec_path()))
+        response += "%20s:  %20s\n" % ("Executables PATH".center(20), ":".join(os.get_exec_path()))
         for i, path in enumerate(os.get_exec_path()):  
             if os.access(path, os.W_OK):
                 response += "\t\t WRITABLE --> %20s\n" % (path)
 
-        # TODO: checking kernel exploits
+        # kernel version
+        response += "%20s:  %20s\n" % ("Kernel information".center(20), execute("cat /proc/version"))
 
-        # TODO: checking sudo version vulns
+        # sudo version
+        response += "%20s\n" % ("Sudo information".center(20))
+        for row in execute("sudo -V").split("\n"):
+            response += f"\t{row}\n"
 
         # TODO: checking dmesg signature verification failed
 
         # TODO: checking more system information (date, system, stats, cpu_info, printers)
+
+        # TODO: enumerate system defenses
         
         return response
     
     def nrc_engine_enumerate_drives(self):
+        """
+        nrc_engine_enumerate_drives() 
+        returns info about mounted and unmounted drvies devices
+        """
         response = "============ %20s ================\n" % ("DRIVES INFO".center(20))
 
         # list mounted drives
@@ -346,6 +358,11 @@ class NetRunnerServer:
         return response
     
     def nrc_engine_enumerate_software(self):
+        """
+        nrc_engine_enumerate_software()
+        returns info about any software useful to a pentesting installed 
+        in machine which server is executing on
+        """
         response = "============ %20s ================\n" % ("SOFTWARE INFO".center(20))
 
         # search useful software (compilers, interpreters, networking tools, etc)
@@ -356,7 +373,18 @@ class NetRunnerServer:
         return response
     
     def nrc_engine_enumerate_processes(self):
-        return "nrc_engine_enumerate_processes NOT IMPLEMENTED YET"
+        """
+        nrc_engine_enumerate_processes()
+        ...
+        """
+        response = "============ %20s ================\n" % ("SOFTWARE INFO".center(20))
+
+        # enumerating active processes
+        response += "%20s\n" % ("Sudo information".center(20))
+        for row in execute("ps aux").split("\n"):
+            response += f"\t{row}\n"
+
+        return response
     
     def nrc_engine_enumerate_cronjobs(self):
         return "nrc_engine_enumerate_cronjobs NOT IMPLEMENTED YET"
