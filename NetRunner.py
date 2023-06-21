@@ -5,7 +5,7 @@ import argparse
 import socket
 import shlex
 import subprocess
-import sys
+import base64
 import textwrap
 import threading
 import platform
@@ -152,6 +152,17 @@ class NetRunnerServer:
 
     def run(self):
         """run() start NetRunner in the specified mode [server, client]"""
+        banner = """
+        ICAgIF8gICBfXyAgICAgX18gIF9fX18KICAgLyB8IC8gL19fICAvIC9fLyBfXyBcX18gIF9fX19f
+        XyAgX19fXyAgX19fICBfX19fXwogIC8gIHwvIC8gXyBcLyBfXy8gL18vIC8gLyAvIC8gX18gXC8g
+        X18gXC8gXyBcLyBfX18vCiAvIC98ICAvICBfXy8gL18vIF8sIF8vIC9fLyAvIC8gLyAvIC8gLyAv
+        ICBfXy8gLwovXy8gfF8vXF9fXy9cX18vXy8gfF98XF9fLF8vXy8gL18vXy8gL18vXF9fXy9fLwog
+        ICAgIF9fIF9fX19fX19fX18gXyAgICBfX19fX19fX19fX18gCiAgIF8vIC8vIF9fX18vIF9fIFwg
+        fCAgLyAvIF9fX18vIF9fIFwgCiAgLyBfXy8gX18vIC8gL18vIC8gfCAvIC8gX18vIC8gL18vIC8g
+        ICAgYXV0aG9yOiBtaW5kMmhleAogKF8gICkgL19fXy8gXywgXy98IHwvIC8gL19fXy8gXywgXy8K
+        LyAgXy9fX19fXy9fLyB8X3wgfF9fXy9fX19fXy9fLyB8X3wKL18vCg==
+        """
+        print(base64.b64decode(banner).decode())
         print_cool_text("[!] Server mode...")
         self.listen()
 
@@ -264,33 +275,37 @@ class NetRunnerServer:
             pass
         elif nrc[0] == "ENUMERATE":
             # https://book.hacktricks.xyz/linux-hardening/linux-privilege-escalation-checklist
-
-            response = self.nrc_engine_enumerate_system()
-            response += self.nrc_engine_enumerate_drives()
-            response += self.nrc_engine_enumerate_software()
-            response += self.nrc_engine_enumerate_processes()
-            response += self.nrc_engine_enumerate_cronjobs()
-            response += self.nrc_engine_enumerate_services()
-            response += self.nrc_engine_enumerate_timer()
-            response += self.nrc_engine_enumerate_sockets()
-            response += self.nrc_engine_enumerate_dbus()
-            response += self.nrc_engine_enumerate_network()
-            response += self.nrc_engine_enumerate_users()
-            response += self.nrc_engine_enumerate_writable_paths()
-            response += self.nrc_engine_enumerate_SUID_GUID()
-            response += self.nrc_engine_enumerate_capabilites()
-            response += self.nrc_engine_enumerate_acls()
-            response += self.nrc_engine_enumerate_shell_sessions()
-            response += self.nrc_engine_enumerate_ssh()
-            response += self.nrc_engine_enumerate_interesting_files()
-            response += self.nrc_engine_enumerate_writable_files()
+            response = self.nrc_engine_enumerate()
 
         else:
             response = "INVALID NRC COMMAND, USE $NRC HELP" 
 
         return response 
 
-    def nrc_engine_enumerate_system():
+    def nrc_engine_enumerate(self):
+        response = self.nrc_engine_enumerate_system()     + "\n"
+        response += self.nrc_engine_enumerate_drives()    + "\n"
+        response += self.nrc_engine_enumerate_software()  + "\n"
+        response += self.nrc_engine_enumerate_processes() + "\n"
+        response += self.nrc_engine_enumerate_cronjobs()  + "\n"
+        response += self.nrc_engine_enumerate_services()  + "\n"
+        response += self.nrc_engine_enumerate_timer()     + "\n"
+        response += self.nrc_engine_enumerate_sockets()   + "\n"
+        response += self.nrc_engine_enumerate_dbus()      + "\n"
+        response += self.nrc_engine_enumerate_network()   + "\n"
+        response += self.nrc_engine_enumerate_users()     + "\n"
+        response += self.nrc_engine_enumerate_writable_paths() + "\n"
+        response += self.nrc_engine_enumerate_SUID_GUID() + "\n"
+        response += self.nrc_engine_enumerate_capabilites() + "\n"
+        response += self.nrc_engine_enumerate_acls()      + "\n"
+        response += self.nrc_engine_enumerate_shell_sessions() + "\n"
+        response += self.nrc_engine_enumerate_ssh()       + "\n"
+        response += self.nrc_engine_enumerate_interesting_files() + "\n"
+        response += self.nrc_engine_enumerate_writable_files() + "\n"
+
+        return response 
+
+    def nrc_engine_enumerate_system(self):
         """ nrc_engine_enumerate_system() performs system enumeration
         - architecture and release info
         - writable paths in $PATH
@@ -299,13 +314,13 @@ class NetRunnerServer:
         - dmesg enumeration
         - more system info (date, system, stats, cpu_info, printers)
         """
-        response = "==== SYSTEM INFORMATION ================\n"
+        response = "============ %20s ================\n" % ("SYSTEM INFORMATION".center(20))
         response += "%20s:  %20s\n" % ("UNAME".center(20), "".join(platform.uname()))
 
         # checking writable paths in $PATH
         response += "%20s:  %20s\n" % ("$PATH".center(20), ":".join(os.get_exec_path()))
         for i, path in enumerate(os.get_exec_path()):  
-            if os.access("/home/th3g3ntl3man", os.W_OK):
+            if os.access(path, os.W_OK):
                 response += "\t\t WRITABLE --> %20s\n" % (path)
 
         # TODO: checking kernel exploits
@@ -318,62 +333,78 @@ class NetRunnerServer:
         
         return response
     
-    def nrc_engine_enumerate_drives():
-        raise NotImplementedError
+    def nrc_engine_enumerate_drives(self):
+        response = "============ %20s ================\n" % ("DRIVES INFO".center(20))
+
+        # list mounted drives
+        response += "%s\n" %(execute("df -h"))
+
+        # list unmounted drives
+
+        # reading fstab
+
+        return response
     
-    def nrc_engine_enumerate_software():
-        raise NotImplementedError
+    def nrc_engine_enumerate_software(self):
+        response = "============ %20s ================\n" % ("SOFTWARE INFO".center(20))
+
+        # search useful software (compilers, interpreters, networking tools, etc)
+        useful_tools = ["bash", "python"]
+        for i, tool in enumerate(useful_tools):
+            response += "%s\t%s"%(tool, execute(f"which {tool}"))
+
+        return response
     
-    def nrc_engine_enumerate_processes():
-        raise NotImplementedError
+    def nrc_engine_enumerate_processes(self):
+        return "nrc_engine_enumerate_processes NOT IMPLEMENTED YET"
     
-    def nrc_engine_enumerate_cronjobs():
-        raise NotImplementedError
+    def nrc_engine_enumerate_cronjobs(self):
+        return "nrc_engine_enumerate_cronjobs NOT IMPLEMENTED YET"
     
-    def nrc_engine_enumerate_services():
-        raise NotImplementedError
+    def nrc_engine_enumerate_services(self):
+        return "nrc_engine_enumerate_services NOT IMPLEMENTED YET"
             
-    def nrc_engine_enumerate_timer():
-        raise NotImplementedError
+    def nrc_engine_enumerate_timer(self):
+        return "nrc_engine_enumerate_timer NOT IMPLEMENTED YET"
             
-    def nrc_engine_enumerate_sockets():
-        raise NotImplementedError
+    def nrc_engine_enumerate_sockets(self):
+        return "nrc_engine_enumerate_sockets NOT IMPLEMENTED YET"
             
-    def nrc_engine_enumerate_dbus():
-        raise NotImplementedError
+    def nrc_engine_enumerate_dbus(self):
+        return "nrc_engine_enumerate_dbus NOT IMPLEMENTED YET"
             
-    def nrc_engine_enumerate_network():
-        raise NotImplementedError
+    def nrc_engine_enumerate_network(self):
+        return "nrc_engine_enumerate_network NOT IMPLEMENTED YET"
+    
+    def nrc_engine_enumerate_users(self):
+        return "nrc_engine_enumerate_users NOT IMPLEMENTED YET"
             
-    def nrc_engine_enumerate_users():
-        raise NotImplementedError
+    def nrc_engine_enumerate_writable_paths(self):
+        return "nrc_engine_enumerate_paths NOT IMPLEMENTED YET"
             
-    def nrc_engine_enumerate_writable_paths():
-        raise NotImplementedError
+    def nrc_engine_enumerate_SUID_GUID(self):
+        return "nrc_engine_enumerate_SUID_GUID NOT IMPLEMENTED YET"
             
-    def nrc_engine_enumerate_SUID_GUID():
-        raise NotImplementedError
+    def nrc_engine_enumerate_capabilites(self):
+        return "nrc_engine_enumerate_capabilities NOT IMPLEMENTED YET"
             
-    def nrc_engine_enumerate_capabilites():
-        raise NotImplementedError
+    def nrc_engine_enumerate_acls(self):
+        return "nrc_engine_enumerate_acls NOT IMPLEMENTED YET"        
             
-    def nrc_engine_enumerate_acls():
-        raise NotImplementedError
+    def nrc_engine_enumerate_shell_sessions(self):
+        return "nrc_engine_enumerate_sessions NOT IMPLEMENTED YET"                
             
-    def nrc_engine_enumerate_shell_sessions():
-        raise NotImplementedError
+    def nrc_engine_enumerate_ssh(self):
+        return "nrc_engine_enumerate_ssh NOT IMPLEMENTED YET"                        
             
-    def nrc_engine_enumerate_ssh():
-        raise NotImplementedError
+    def nrc_engine_enumerate_interesting_files(self):
+        return "nrc_engine_enumerate_interesting_files NOT IMPLEMENTED YET"                                
             
-    def nrc_engine_enumerate_interesting_files():
-        raise NotImplementedError
-            
-    def nrc_engine_enumerate_writable_files():
-        raise NotImplementedError
+    def nrc_engine_enumerate_writable_files(self):
+        return "nrc_engine_enumerate_writable_files NOT IMPLEMENTED YET"                                        
 
 
-class NetRunnerClient(NetRunnerServer):
+class NetRunnerClient():
     def __init__(self, args, buffer=None):
         self.args = args
         self.buffer = buffer
@@ -382,6 +413,16 @@ class NetRunnerClient(NetRunnerServer):
 
     def run(self):
         """run() start NetRunner in the specified mode [server, client]"""
+        banner = """
+        ICAgIF8gICBfXyAgICAgX18gIF9fX18KICAgLyB8IC8gL19fICAvIC9fLyBfXyBcX18gIF9fX19f
+        XyAgX19fXyAgX19fICBfX19fXwogIC8gIHwvIC8gXyBcLyBfXy8gL18vIC8gLyAvIC8gX18gXC8g
+        X18gXC8gXyBcLyBfX18vCiAvIC98ICAvICBfXy8gL18vIF8sIF8vIC9fLyAvIC8gLyAvIC8gLyAv
+        ICBfXy8gLwovXy8gfF8vXF9fXy9cX18vXy8gfF98XF9fLF8vXy8gL18vXy8gL18vXF9fXy9fLwog
+        ICBfX19fX19fX18gICAgICAgICAgICBfXwogIC8gX19fXy8gKF8pX18gIF9fX18gIC8gL18KIC8g
+        LyAgIC8gLyAvIF8gXC8gX18gXC8gX18vICAgICBhdXRob3I6IG1pbmQyaGV4Ci8gL19fXy8gLyAv
+        ICBfXy8gLyAvIC8gL18KXF9fX18vXy9fL1xfX18vXy8gL18vXF9fLwo=
+        """
+        print(base64.b64decode(banner).decode())
         print_cool_text("[!] Client mode...")
 
         try:  # trying to connect to target on the specified port
