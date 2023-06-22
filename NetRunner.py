@@ -10,6 +10,7 @@ import textwrap
 import threading
 import platform
 import os
+import re
 from random import randint
 from time import sleep
 
@@ -134,9 +135,9 @@ def execute(cmd):
     try:
         output = subprocess.check_output(shlex.split(cmd), stderr=subprocess.STDOUT)
     except subprocess.CalledProcessError:
-        return "[X] Error executing command...\n\n"
+        return "[X] Error: returned error code while executing command...\n\n"
     except FileNotFoundError:
-        return "[X] File not found...\n\n"
+        return "[X] Error: File not found...\n\n"
     
     return output.decode()
 
@@ -283,7 +284,9 @@ class NetRunnerServer:
         return response 
 
     def nrc_engine_enumerate(self):
-        response = self.nrc_engine_enumerate_system()     + "\n"
+        operative_system = platform.system()
+        response = self.nrc_engine_enumerate_system(operative_system)     + "\n"
+        """
         response += self.nrc_engine_enumerate_drives()    + "\n"
         response += self.nrc_engine_enumerate_software()  + "\n"
         response += self.nrc_engine_enumerate_processes() + "\n"
@@ -302,10 +305,11 @@ class NetRunnerServer:
         response += self.nrc_engine_enumerate_ssh()       + "\n"
         response += self.nrc_engine_enumerate_interesting_files() + "\n"
         response += self.nrc_engine_enumerate_writable_files() + "\n"
+        """
 
         return response 
 
-    def nrc_engine_enumerate_system(self):
+    def nrc_engine_enumerate_system(self, operative_system):
         """ nrc_engine_enumerate_system() performs system enumeration
         - architecture and release info
         - writable paths in $PATH
@@ -314,30 +318,75 @@ class NetRunnerServer:
         - dmesg enumeration
         - more system info (date, system, stats, cpu_info, printers)
         """
-        response = "============ %20s ================\n" % ("SYSTEM INFORMATION".center(20))
+        separator = "="*30 + "%20s" + "="*30 + "\n"
+        if operative_system == "Linux":
+            response = separator % ("SYSTEM INFORMATION".center(20))
+            # OS information https://book.hacktricks.xyz/linux-hardening/privilege-escalation#os-info
+            response += "---> %20s:  %20s\n" % ("OS INFORMATION", "".join(platform.uname()))
 
-        # OS information
-        response += "%20s:  %20s\n" % ("OS information".center(20), "".join(platform.uname()))
+            # searching for writable paths in $PATH  https://book.hacktricks.xyz/linux-hardening/privilege-escalation#path
+            response += "---> %20s:  %20s\n" % ("EXECUTABLE PATH", ":".join(os.get_exec_path()))
+            for i, path in enumerate(os.get_exec_path()):  
+                if os.access(path, os.W_OK):
+                    response += "\t\t WRITABLE --> %20s\n" % (path)
 
-        # checking writable paths in $PATH
-        response += "%20s:  %20s\n" % ("Executables PATH".center(20), ":".join(os.get_exec_path()))
-        for i, path in enumerate(os.get_exec_path()):  
-            if os.access(path, os.W_OK):
-                response += "\t\t WRITABLE --> %20s\n" % (path)
+            # searching for useful info in Env variables https://book.hacktricks.xyz/linux-hardening/privilege-escalation#env-info
+            response += "---> %20s: \n" % ("ENVIRONMENT VARIABLES" )
+            for env_var in os.environ:
+                response += "\t\t%-20s\t%s\n" % (env_var, os.getenv(env_var))
 
-        # kernel version
-        response += "%20s:  %20s\n" % ("Kernel information".center(20), execute("cat /proc/version"))
+            # inspect kernel https://book.hacktricks.xyz/linux-hardening/privilege-escalation#kernel-exploits
+            response += "---> %20s:  %20s" % ("KERNEL INFORMATION", execute("cat /proc/version"))
 
-        # sudo version
-        response += "%20s\n" % ("Sudo information".center(20))
-        for row in execute("sudo -V").split("\n"):
-            response += f"\t{row}\n"
+            # inspect sudo https://book.hacktricks.xyz/linux-hardening/privilege-escalation#sudo-version
+            response += "---> %20s:\n" % ("SUDO INFORMATION")
+            for row in execute("sudo -V").split("\n"):
+                response += f"\t\t{row}\n"
 
-        # TODO: checking dmesg signature verification failed
+            # checking dmesg signature verification failed https://book.hacktricks.xyz/linux-hardening/privilege-escalation#dmesg-signature-verification-failed
+            response += "---> %20s:\n" % ("DMESG SIGNATURE")
+            signature_info = re.findall(".*signature.*", execute("dmesg"))
+            for signature in signature_info:
+                response += f"\t\t{signature}\n"
 
-        # TODO: checking more system information (date, system, stats, cpu_info, printers)
+            # checking more system information https://book.hacktricks.xyz/linux-hardening/privilege-escalation#more-system-enumeration
+            response += "---> %20s:  %20s\n" % ("DATE", execute("date"))  # date
 
-        # TODO: enumerate system defenses
+            response += "---> %20s:\n" % ("SYSTEM STATS")  # lsblk
+            for row in execute("lsblk").split("\n"):
+                response += f"\t\t{row}\n"
+
+            response += "---> %20s:\n" % ("CPU INFO")  # lscpu
+            for row in execute("lscpu").split("\n"):
+                response += f"\t\t{row}\n"
+            
+            # enumerate system defenses https://book.hacktricks.xyz/linux-hardening/privilege-escalation#enumerate-possible-defenses
+            response += "---> %20s:\n" % ("SYSTEM DEFENSES")   
+            for command in [
+                "which aa-status", 
+                "which apparmor_status", 
+                "which paxctl-ng",
+                "which paxctl",
+                "which sestatus"]: # "APP ARMOR":
+                temporal_response = execute(command)
+                if temporal_response.startswith("[X] Error"):
+                    response += "\t\t%-24s %20s\n" % (command, "NOT ENABLED")
+                else:
+                    response += "\t\t%-24s %20s\n" % (command, execute(command))
+
+            if re.search("exec-shield", execute("cat /etc/sysctl.conf")):
+                response += "\t\t%-24s %20s\n" % ("EXEC SHIELD", "ENABLED")
+            else:
+                response += "\t\t%-24s %20s\n" % ("EXEC SHIELD", "NOT ENABLED")
+            
+            if not execute("cat /proc/sys/kernel/randomize_va_space").startswith("0"):
+                response += "\t\t%-24s %20s\n" % ("ASLR", "ENABLED")
+            else:
+                response += "\t\t%-24s %20s\n" % ("ASLR", "NOT ENABLED")
+
+
+        else:
+            response = "NOT IMPLEMENTED YET\n"
         
         return response
     
