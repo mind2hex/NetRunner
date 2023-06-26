@@ -55,18 +55,6 @@ def parse_arguments():
         )
     )
     parser.add_argument(
-        "-s",
-        "--shell",
-        action="store_true",
-        help="spawn command shell to clients [SERVER MODE ONLY]"
-    )
-    parser.add_argument(
-        "-e",
-        "--execute",
-        metavar="",
-        help="execute specified command and send output to clients [SERVER MODE ONLY]"
-    )
-    parser.add_argument(
         "-l",
         "--listen",
         action="store_true",
@@ -142,6 +130,14 @@ def execute(cmd):
     return output.decode()
 
 
+class AsciiColors:
+    TEXT     = "\033[94m"
+    LEVEL_3  = "\033[93m"
+    LEVEL_2  = "\033[92m"
+    LEVEL_1  = "\033[91m"
+    ENDC     = "\033[0m"
+
+
 class NetRunnerServer:
     client_sockets = []
 
@@ -200,29 +196,16 @@ class NetRunnerServer:
         NetRunnerServer accept the next execution modes:
             # shell mode
             spawn a shell to clients that connects to NetRunnerServer
-
-            # command mode
-            execute a command and sends the output to the clients that connects to NetRunnerServer
         """
         client_socket.settimeout(1.0)
         client_addr, client_port = client_socket.getsockname()
         print_cool_text(f"[!] Connection from {client_addr}:{client_port}")
 
-        if self.args.execute:  # executes self.args.execute and sends back the output to the client
-            self.exec_mode(self, client_socket)            
-
-        elif self.args.shell:  # spawn a custom shell to the client
-            try:
-                self.shell_mode(client_socket)
-            except (BrokenPipeError, ConnectionResetError):
-                print(f"[!] Connection closed from {client_addr}:{client_port}")
-                client_socket.close()
-            
-
-    def exec_mode(self, client_socket):
-        output = execute(self.args.execute)
-        client_socket.send(output.encode())
-        client_socket.close()        
+        try:
+            self.shell_mode(client_socket)
+        except (BrokenPipeError, ConnectionResetError):
+            print(f"[!] Connection closed from {client_addr}:{client_port}")
+            client_socket.close()
 
     def shell_mode(self, client_socket):
         client_banner = "-" * 80 + "\n"
@@ -275,19 +258,29 @@ class NetRunnerServer:
             """ i dont have idea neither"""
             pass
         elif nrc[0] == "ENUMERATE":
-            # https://book.hacktricks.xyz/linux-hardening/linux-privilege-escalation-checklist
-            response = self.nrc_engine_enumerate()
-
+            if len(nrc) > 1 and nrc[1] == "HELP":
+                response =  "$NRC ENUMERATE [SYSTEM|DRIVES |SOFTWARE|PROCESS|CRONJOBS|SERVICES]\n"
+                response += "               [TIMER |SOCKETS|DBUS    |NETWORK|USERS   |WPATHS  |SUIDGUID]\n"
+                response += "               [CAPAB |ACLS   |SHELLS  |SSH    |WOWFILES|WFILES  | ALL]\n"
+                response += "               [default ALL]\n"
+            else:
+                if platform.system() == "Linux":
+                    # https://book.hacktricks.xyz/linux-hardening/linux-privilege-escalation-checklist
+                    response = self.nrc_engine_enumerate_Linux()
+                elif platform.system() == "Windows":
+                    # https://book.hacktricks.xyz/windows-hardening/checklist-windows-privilege-escalation
+                    #response = self.nrc_engine_enumerate_Windows()
+                    response = "WINDOWS ENUMERATION NOT IMPLEMENTED YET"
+                    pass
         else:
             response = "INVALID NRC COMMAND, USE $NRC HELP" 
 
         return response 
 
-    def nrc_engine_enumerate(self):
-        operative_system = platform.system()
-        response = self.nrc_engine_enumerate_system(operative_system)     + "\n"
+    def nrc_engine_enumerate_Linux(self):
+        response = self.nrc_engine_enumerate_Linux_system()
+        response += self.nrc_engine_enumerate_Linux_drives()
         """
-        response += self.nrc_engine_enumerate_drives()    + "\n"
         response += self.nrc_engine_enumerate_software()  + "\n"
         response += self.nrc_engine_enumerate_processes() + "\n"
         response += self.nrc_engine_enumerate_cronjobs()  + "\n"
@@ -309,7 +302,7 @@ class NetRunnerServer:
 
         return response 
 
-    def nrc_engine_enumerate_system(self, operative_system):
+    def nrc_engine_enumerate_Linux_system(self):
         """ nrc_engine_enumerate_system() performs system enumeration
         - architecture and release info
         - writable paths in $PATH
@@ -318,95 +311,104 @@ class NetRunnerServer:
         - dmesg enumeration
         - more system info (date, system, stats, cpu_info, printers)
         """
-        separator = "="*30 + "%20s" + "="*30 + "\n"
-        if operative_system == "Linux":
-            response = separator % ("SYSTEM INFORMATION".center(20))
-            # OS information https://book.hacktricks.xyz/linux-hardening/privilege-escalation#os-info
-            response += "---> %20s:  %20s\n" % ("OS INFORMATION", "".join(platform.uname()))
+        separator = "="*30 + "%30s" + "="*30 + "\n"
+        
+        response = separator % (f"{AsciiColors.TEXT}SYSTEM INFORMATION{AsciiColors.ENDC}".center(30))
+        # OS information https://book.hacktricks.xyz/linux-hardening/privilege-escalation#os-info
+        response += "[!] %-25s:  %20s\n" % (f"{AsciiColors.TEXT}OS INFORMATION{AsciiColors.ENDC}", "".join(platform.uname()))
 
-            # searching for writable paths in $PATH  https://book.hacktricks.xyz/linux-hardening/privilege-escalation#path
-            response += "---> %20s:  %20s\n" % ("EXECUTABLE PATH", ":".join(os.get_exec_path()))
-            for i, path in enumerate(os.get_exec_path()):  
-                if os.access(path, os.W_OK):
-                    response += "\t\t WRITABLE --> %20s\n" % (path)
+        # searching for writable paths in $PATH  https://book.hacktricks.xyz/linux-hardening/privilege-escalation#path
+        response += "[!] %-25s:  %20s\n" % (f"{AsciiColors.TEXT}EXECUTABLE PATH{AsciiColors.ENDC}", ":".join(os.get_exec_path()))
+        for i, path in enumerate(os.get_exec_path()):  
+            if os.access("/home/th3g3ntl3man", os.W_OK):
+                response += f"\t{AsciiColors.LEVEL_1}WRITABLE --> %-20s{AsciiColors.ENDC}\n" % (path)
 
-            # searching for useful info in Env variables https://book.hacktricks.xyz/linux-hardening/privilege-escalation#env-info
-            response += "---> %20s: \n" % ("ENVIRONMENT VARIABLES" )
-            for env_var in os.environ:
-                response += "\t\t%-20s\t%s\n" % (env_var, os.getenv(env_var))
+        # searching for useful info in Env variables https://book.hacktricks.xyz/linux-hardening/privilege-escalation#env-info
+        response += "[!] %-25s: \n" % (f"{AsciiColors.TEXT}ENV VARIABLES{AsciiColors.ENDC}" )
+        for env_var in os.environ:
+            response += "\t%-40s %-s\n" % (env_var, os.getenv(env_var))
 
-            # inspect kernel https://book.hacktricks.xyz/linux-hardening/privilege-escalation#kernel-exploits
-            response += "---> %20s:  %20s" % ("KERNEL INFORMATION", execute("cat /proc/version"))
+        # inspect kernel https://book.hacktricks.xyz/linux-hardening/privilege-escalation#kernel-exploits
+        response += "[!] %-25s:  %20s" % (f"{AsciiColors.TEXT}KERNEL INFORMATION{AsciiColors.ENDC}", execute("cat /proc/version"))
 
-            # inspect sudo https://book.hacktricks.xyz/linux-hardening/privilege-escalation#sudo-version
-            response += "---> %20s:\n" % ("SUDO INFORMATION")
-            for row in execute("sudo -V").split("\n"):
-                response += f"\t\t{row}\n"
-
-            # checking dmesg signature verification failed https://book.hacktricks.xyz/linux-hardening/privilege-escalation#dmesg-signature-verification-failed
-            response += "---> %20s:\n" % ("DMESG SIGNATURE")
-            signature_info = re.findall(".*signature.*", execute("dmesg"))
-            for signature in signature_info:
-                response += f"\t\t{signature}\n"
-
-            # checking more system information https://book.hacktricks.xyz/linux-hardening/privilege-escalation#more-system-enumeration
-            response += "---> %20s:  %20s\n" % ("DATE", execute("date"))  # date
-
-            response += "---> %20s:\n" % ("SYSTEM STATS")  # lsblk
-            for row in execute("lsblk").split("\n"):
-                response += f"\t\t{row}\n"
-
-            response += "---> %20s:\n" % ("CPU INFO")  # lscpu
-            for row in execute("lscpu").split("\n"):
-                response += f"\t\t{row}\n"
+        # inspect sudo https://book.hacktricks.xyz/linux-hardening/privilege-escalation#sudo-version
+        response += "[!] %-25s:\n" % (f"{AsciiColors.TEXT}SUDO INFORMATION{AsciiColors.ENDC}")
+        for row in execute("sudo -V").split("\n"):
+            response += f"\t{row}\n"
             
-            # enumerate system defenses https://book.hacktricks.xyz/linux-hardening/privilege-escalation#enumerate-possible-defenses
-            response += "---> %20s:\n" % ("SYSTEM DEFENSES")   
-            for command in [
-                "which aa-status", 
-                "which apparmor_status", 
-                "which paxctl-ng",
-                "which paxctl",
-                "which sestatus"]: # "APP ARMOR":
-                temporal_response = execute(command)
-                if temporal_response.startswith("[X] Error"):
-                    response += "\t\t%-24s %20s\n" % (command, "NOT ENABLED")
-                else:
-                    response += "\t\t%-24s %20s\n" % (command, execute(command))
-
-            if re.search("exec-shield", execute("cat /etc/sysctl.conf")):
-                response += "\t\t%-24s %20s\n" % ("EXEC SHIELD", "ENABLED")
-            else:
-                response += "\t\t%-24s %20s\n" % ("EXEC SHIELD", "NOT ENABLED")
-            
-            if not execute("cat /proc/sys/kernel/randomize_va_space").startswith("0"):
-                response += "\t\t%-24s %20s\n" % ("ASLR", "ENABLED")
-            else:
-                response += "\t\t%-24s %20s\n" % ("ASLR", "NOT ENABLED")
-
-
+        # checking dmesg signature verification failed https://book.hacktricks.xyz/linux-hardening/privilege-escalation#dmesg-signature-verification-failed
+        response += "[!] %-25s:" % (f"{AsciiColors.TEXT}DMESG SIGNATURE{AsciiColors.ENDC}")
+        signature_info = re.findall(".*signature.*", execute("dmesg"))
+        if len(signature_info) == 0:
+            response += " NOT FOUND \n"
         else:
-            response = "NOT IMPLEMENTED YET\n"
+            for signature in signature_info:
+                response += f"\t{signature}\n"
+
+        # checking more system information https://book.hacktricks.xyz/linux-hardening/privilege-escalation#more-system-enumeration
+        response += "[!] %-25s:  %20s\n" % (f"{AsciiColors.TEXT}DATE{AsciiColors.ENDC}", execute("date"))  # date
+
+        response += "[!] %-25s:\n" % (f"{AsciiColors.TEXT}SYSTEM STATS{AsciiColors.ENDC}")  # lsblk
+        for row in execute("lsblk").split("\n"):
+            response += f"\t{row}\n"
+
+        response += "[!] %-25s:\n" % (f"{AsciiColors.TEXT}CPU INFO{AsciiColors.ENDC}")  # lscpu
+        for row in execute("lscpu").split("\n"):
+            response += f"\t{row}\n"
+        
+        # enumerate system defenses https://book.hacktricks.xyz/linux-hardening/privilege-escalation#enumerate-possible-defenses
+        response += "[!] %-25s:\n" % (f"{AsciiColors.TEXT}SYSTEM DEFENSES{AsciiColors.ENDC}")   
+        for command in [
+            "which aa-status", 
+            "which apparmor_status", 
+            "which paxctl-ng",
+            "which paxctl",
+            "which sestatus"]: # "APP ARMOR":
+            temporal_response = execute(command)
+            if temporal_response.startswith("[X] Error"):
+                response += "\t%-24s %20s\n" % (command, "NOT ENABLED")
+            else:
+                response += "\t%-24s %20s\n" % (command, execute(command))
+
+        if re.search("exec-shield", execute("cat /etc/sysctl.conf")):
+            response += "\t%-24s %20s\n" % ("EXEC SHIELD", "ENABLED")
+        else:
+            response += "\t%-24s %20s\n" % ("EXEC SHIELD", "NOT ENABLED")
+        
+        if not execute("cat /proc/sys/kernel/randomize_va_space").startswith("0"):
+            response += "\t%-24s %20s\n" % ("ASLR", "ENABLED")
+        else:
+            response += "\t%-24s %20s\n" % ("ASLR", "NOT ENABLED")
         
         return response
     
-    def nrc_engine_enumerate_drives(self):
+    def nrc_engine_enumerate_Linux_drives(self):
         """
         nrc_engine_enumerate_drives() 
         returns info about mounted and unmounted drvies devices
         """
-        response = "============ %20s ================\n" % ("DRIVES INFO".center(20))
+        separator = "="*30 + "%30s" + "="*30 + "\n"
+        
+        response = separator % (f"{AsciiColors.TEXT}DRIVES INFORMATION{AsciiColors.ENDC}".center(30))
 
         # list mounted drives
-        response += "%s\n" %(execute("df -h"))
+        response += "[!] %-25s:\n" % (f"{AsciiColors.TEXT}MOUNTED DRIVES{AsciiColors.ENDC}")   
+        for row in execute("df -h").split("\n"):
+            response += "\t" + row + "\n" 
 
         # list unmounted drives
+        response += "[!] %-25s:\n" % (f"{AsciiColors.TEXT}UMOUNTED DRIVES{AsciiColors.ENDC}")   
+        for row in execute("lsblk").split("\n"):
+            response += "\t" + row + "\n" 
 
         # reading fstab
+        response += "[!] %-25s:\n" % (f"{AsciiColors.TEXT}FSTAB{AsciiColors.ENDC}")   
+        for row in execute("cat /etc/fstab").split("\n"):
+            response += "\t" + row + "\n" 
 
         return response
     
-    def nrc_engine_enumerate_software(self):
+    def nrc_engine_enumerate_Linux_software(self):
         """
         nrc_engine_enumerate_software()
         returns info about any software useful to a pentesting installed 
@@ -421,7 +423,7 @@ class NetRunnerServer:
 
         return response
     
-    def nrc_engine_enumerate_processes(self):
+    def nrc_engine_enumerate_Linux_processes(self):
         """
         nrc_engine_enumerate_processes()
         ...
@@ -435,49 +437,49 @@ class NetRunnerServer:
 
         return response
     
-    def nrc_engine_enumerate_cronjobs(self):
+    def nrc_engine_enumerate_Linux_cronjobs(self):
         return "nrc_engine_enumerate_cronjobs NOT IMPLEMENTED YET"
     
-    def nrc_engine_enumerate_services(self):
+    def nrc_engine_enumerate_Linux_services(self):
         return "nrc_engine_enumerate_services NOT IMPLEMENTED YET"
             
-    def nrc_engine_enumerate_timer(self):
+    def nrc_engine_enumerate_Linux_timer(self):
         return "nrc_engine_enumerate_timer NOT IMPLEMENTED YET"
             
-    def nrc_engine_enumerate_sockets(self):
+    def nrc_engine_enumerate_Linux_sockets(self):
         return "nrc_engine_enumerate_sockets NOT IMPLEMENTED YET"
             
-    def nrc_engine_enumerate_dbus(self):
+    def nrc_engine_enumerate_Linux_dbus(self):
         return "nrc_engine_enumerate_dbus NOT IMPLEMENTED YET"
             
-    def nrc_engine_enumerate_network(self):
+    def nrc_engine_enumerate_Linux_network(self):
         return "nrc_engine_enumerate_network NOT IMPLEMENTED YET"
     
-    def nrc_engine_enumerate_users(self):
+    def nrc_engine_enumerate_Linux_users(self):
         return "nrc_engine_enumerate_users NOT IMPLEMENTED YET"
             
-    def nrc_engine_enumerate_writable_paths(self):
+    def nrc_engine_enumerate_Linux_writable_paths(self):
         return "nrc_engine_enumerate_paths NOT IMPLEMENTED YET"
             
-    def nrc_engine_enumerate_SUID_GUID(self):
+    def nrc_engine_enumerate_Linux_SUID_GUID(self):
         return "nrc_engine_enumerate_SUID_GUID NOT IMPLEMENTED YET"
             
-    def nrc_engine_enumerate_capabilites(self):
+    def nrc_engine_enumerate_Linux_capabilites(self):
         return "nrc_engine_enumerate_capabilities NOT IMPLEMENTED YET"
             
-    def nrc_engine_enumerate_acls(self):
+    def nrc_engine_enumerate_Linux_acls(self):
         return "nrc_engine_enumerate_acls NOT IMPLEMENTED YET"        
             
-    def nrc_engine_enumerate_shell_sessions(self):
+    def nrc_engine_enumerate_Linux_shell_sessions(self):
         return "nrc_engine_enumerate_sessions NOT IMPLEMENTED YET"                
             
-    def nrc_engine_enumerate_ssh(self):
+    def nrc_engine_enumerate_Linux_ssh(self):
         return "nrc_engine_enumerate_ssh NOT IMPLEMENTED YET"                        
             
-    def nrc_engine_enumerate_interesting_files(self):
+    def nrc_engine_enumerate_Linux_interesting_files(self):
         return "nrc_engine_enumerate_interesting_files NOT IMPLEMENTED YET"                                
             
-    def nrc_engine_enumerate_writable_files(self):
+    def nrc_engine_enumerate_Linux_writable_files(self):
         return "nrc_engine_enumerate_writable_files NOT IMPLEMENTED YET"                                        
 
 
@@ -570,6 +572,7 @@ if __name__ == "__main__":
 # FIXME: Intentar usar librerias estandar para evitar el uso de pip install
 
 ### TODO
+# TODO: Terminar de implementar la seleccion de enumeracion en la linea 265
 # TODO: Implementar el NRC Engine para la ejecucion de custom commands en servidor y cliente
 # TODO: Implementar sistema de contrasena para el servidor
 # TODO: Implementar debug/verbose
