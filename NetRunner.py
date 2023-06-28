@@ -11,9 +11,98 @@ import threading
 import platform
 import os
 import re
+import psutil
 from random import randint
 from time import sleep
 
+
+CYBERPUNK_SAMURAI_BANNER = """
+4qCA4qCA4qCA4qCA4qCA4qCA4qCA4qCA4qCA4qCA4qCA4qCA4qCA4qCA4qCA4qCA4qCA4qCA4qCA
+4qCA4qCA4qCA4qCA4qCA4qCA4qCA4qCA4qCA4qCA4qCA4qCA4qCA4qCA4qCA4qCA4qKA4qOg4qOk
+4qGECuKggOKggOKggOKggOKggOKggOKggOKggOKggOKggOKggOKggOKggOKggOKggOKggOKggOKg
+gOKggOKggOKggOKggOKggOKggOKggOKggOKggOKggOKggOKggOKggOKggOKggOKigOKjtOKjv+Kj
+v+Kgv+Kgk+KggArioIDioIDioIDioIDioIDioIDioIDioIDioIDioIDioIDioIDioIDioIDioIDi
+oIDioIDioIDioIDioIDioIDioIDioIDioIDioIDioIDioIDioIDioIDioIDioIDioIDio7Dio7/i
+o7/ioZ/ioIHioIDioIDioIDioIDioIDioIDioIDioIDioIDioIDioIDioIDioIDioIDioIDioYAK
+4qCA4qCA4qCA4qCA4qCA4qCA4qCA4qCA4qCA4qCA4qCA4qCA4qCA4qCA4qCA4qCA4qCA4qCA4qCA
+4qCA4qCA4qOw4qCD4qCA4qCA4qCA4qCA4qCA4qCA4qCA4qCA4qO44qO/4qO/4qGf4qCA4qKA4qGG
+4qCA4qCA4qCA4qCA4qCA4qCA4qKA4qCACuKggOKggOKggOKggOKggOKggOKggOKggOKggOKggOKg
+gOKggOKggOKggOKggOKggOKggOKggOKggOKhvOKggOKgheKggOKggOKggOKggOKigOKhhOKggOKg
+gOKggOKjv+Kjv+Kjv+Kjl+KjoOKjvuKhh+KggOKggOKggOKggOKioOKghuKggArioIDioIDioIDi
+oIDioIDioIDioIDioIDioIDioIDioIDioIDioIDioIDioIDioIDioIDioIDiorjioYfioIDioIDi
+oIDioIDioIDioIDiorjio4bioIDioIDiorDio7/io7/io7/io7/io7/io6/ioIDiooDio7TioIbi
+oIDioLvioIIK4qCA4qCA4qCA4qCA4qCA4qCA4qCA4qCA4qCA4qCA4qCA4qCA4qCA4qCA4qCA4qCA
+4qCA4qCA4qG84qO34qCA4qCA4qCA4qCA4qCA4qCA4qK44qO/4qCA4qKA4qO+4qO/4qO/4qO/4qO/
+4qO/4qG/4qOl4qO+4qGf4qCACuKggOKggOKggOKggOKggOKggOKggOKggOKggOKggOKggOKggOKg
+gOKggOKggOKggOKggOKggOKiu+Kjv+KhhuKggOKggOKjgOKjtOKjvuKjv+Kjv+Kjv+Kjv+Kjv+Kj
+v+Kjv+Kjv+Kjv+Kjv+Kgj+KiueKjv+KggOKggOKggOKjtOKgg+KggOKjoOKhhuKigArioIDioIDi
+oIDioIDioIDioIDioIDioIDioIDioIDioIDioIDioLHio4TioIDioIDioIDioIDioIjio7/ioYfi
+oIDiorDio7/io7/io7/io7/io7/io7/io7/io7/io7/io7/io7/iob/ioIPioIDioJjioIHioIDi
+oIDio7Dio7/ioIDiorDioJ/ioIDio6QK4qCA4qCA4qCA4qCA4qCA4qCA4qCA4qCA4qCA4qCA4qCA
+4qCA4qCA4qCA4qCA4qCA4qCA4qCA4qKg4qO/4qCA4qCA4qCZ4qO/4qO/4qO/4qO/4qO/4qO/4qO/
+4qO/4qO/4qO/4qO/4qCA4qKA4qCB4qCA4qKA4qOw4qO/4qO/4qG/4qCG4qCI4qCA4qOw4qO34qGE
+CuKggOKggOKggOKggOKggOKgmOKiv+KjpuKjhOKggOKggOKggOKggOKggOKggOKggOKggOKggOKh
+vuKjp+KhnOKggOKjoOKjv+Kjv+Kjv+Kjv+Khv+Kgi+KjueKjv+Kjv+Kjv+Kgn+KiuOKjv+KjpuKj
+tOKjv+Kjv+Kjv+Khv+KggeKggOKggOKjvuKjv+Kjv+KggQrioIDioIDioIDioIDiooDioIDioIDi
+ornio7/io6fioIDioIDioIDioIDioYDiooDio77iooDio7/io7/io7/io77io7/io7/io7/io7/i
+oJvioIHioqDioL/ioJ/ioInioIHioIDiorjio7nio7/io7/ioJvioLvio6/ioIHioIDioIDio4Di
+o7/ioL/ioIHioIDioIDioIDio4biorkK4qCA4qCA4qCw4qOE4qC44qO34qGE4qCA4qK/4qOf4qCA
+4qCA4qCA4qCA4qO34qGA4qOH4qCA4qO/4qO/4qC/4qO/4qCb4qO/4qCP4qCA4qCA4qGE4qCA4qKA
+4qO04qG+4qCB4qCA4qO84qO/4qG/4qCP4qCA4qCQ4qO/4qGE4qCA4qOw4qCL4qCA4qCA4qO64qCA
+4qCA4qCA4qK54qOYCuKggOKggOKgoOKjveKjtuKhv+Kgh+KggOKggOKiieKggOKgtuKgkuKggOKg
+mOKit+Kjv+KjpeKgiOKgv+KggOKgmOKihuKgmOKggOKioOKjv+KhgeKggOKjvuKjv+Kgg+KggOKj
+uOKiv+Kjv+Kjh+KjgOKggOKigOKjv+Khh+KggOKhmOKggOKggOKguOKjv+KggOKggOKggOKiuOKg
+gQrioIDioIDioIDioJjioIviooDioIDio4TioIDio4bioIHio77io7/io6fioIDioJjio7/io7/i
+o6biorjio6bioIDioIjio6Tio7zio7/io7/io7/io77iob/ioIHioIDioIjio6Dio77io7/io7/i
+o7/io7/io7/io7/ioYfiooDio6fioIDioLLio4Dio7/ioYbioIDioJAK4qCA4qCA4qCA4qCA4qG2
+4qKg4qO+4qG/4qC34qC/4qK34qO/4qO/4qO/4qCH4qCA4qCL4qK54qO/4qO24qO/4qO34qO24qO/
+4qO/4qO/4qCL4qCJ4qO/4qCD4qCA4qKA4qO+4qO/4qO/4qO/4qO/4qG/4qC74qCZ4qC/4qGH4qCI
+4qO/4qCB4qCA4qO/4qCP4qCACuKggOKggOKggOKggOKhgOKgmeKhgeKgtuKjv+Khv+KikuKjoOKg
+gOKhpOKggOKikOKggOKguOKjv+Kjv+Kjv+Kjv+Kjv+Khn+KgieKiv+KggOKiuOKjv+KhgOKggOKi
+uOKjv+Kjv+Kjv+Kgn+KggeKggOKggOKggOKggOKiseKggOKgjuKgoOKglOKggQrioIDioIDio7bi
+oIDioYfiooTioJjioLLio6bioLDioJ/ioInioJLioLLioYTioIDioIHiorjio7/ioJ/ioIHiorji
+oJ/ioqPioIDioLvioYDioJjior/io7/io7/io7/io7/io7/ioI/ioIDioIDioIDioIDioIDioIDi
+oJjioYbioIDio7bioIPio7DioYYK4qCC4qCA4qO/4qOm4qCI4qCI4qCb4qK24qOm4qCA4qG44qGA
+4qCA4qCA4qG44qCA4qCA4qCI4qCB4qCA4qCw4qCD4qCA4qK44qOE4qCA4qCY4qCC4qGA4qK74qO/
+4qG/4qCf4qCA4qKk4qCA4qCA4qCA4qCA4qCA4qCA4qKw4qCX4qKg4qGv4qKw4qO/4qCBCuKggOKj
+vOKjv+Khv+KggeKggOKgiOKigOKjhOKggOKgt+KjrOKjkeKhqOKjtOKhh+KjtOKggOKigOKjhOKj
+oOKjpOKjtOKjv+KjvuKjt+KihOKhgOKggOKgiOKggOKggOKgiOKgk+Kgi+KggOKggOKggOKggOKi
+gOKjvOKgj+KggOKjuOKhh+KiqOKhjwrioIDioqvio7/ioYPioIDiorDio7/io6bio4XioYDioJvi
+oLbioLbioLbioIzioIHioIDioIDioIDioIDioInioInio7/io7nio7/ioInioJnio4zioIDioIDi
+oIDioIDioIDioIDioIDioIDioIDiooDio6TioZ7ioIHioIDio7DioqvioYfioIjioIAK4qCA4qCA
+4qCI4qCH4qCY4qCY4qK/4qOl4qOA4qCJ4qCb4qO/4qO34qO24qO/4qO/4qGf4qKA4qO04qCC4qCA
+4qCA4qCA4qC54qO/4qOn4qGA4qCA4qCZ4qKm4qGA4qCA4qCA4qKm4qOE4qOk4qOo4qOt4qOk4qOg
+4qC04qCL4qCA4qC44qCB4qCA4qKm4qGACuKggOKggOKggOKggOKggOKggOKggOKjrOKjmeKhm+Kg
+k+KgkuKikuKigOKjpOKggOKjhOKgu+Kjv+KjhOKggOKggOKggOKigOKjv+Kjv+KjveKjpuKhgOKg
+gOKggOKgs+KjhOKhgOKggOKgiOKgm+Kgm+Kgm+KggeKggOKhoOKgnuKggeKggOKgu+KjpuKhueKj
+puKhkOKihArioIDioIDioIDioIDioIDioIDioIDioIDioInioInioInio7vioJ/io5vio4Pio7ji
+o7/ioYfio7nio7/iobfioIDio6DioJ/iorvio7/ior/ioJvioIvioIPioYTioIDioIjior/io7bi
+o7bioKbiorbioZbioIbiooHio4TioJDior/io7fio4TioIjioLvio4ziorvio4bioKHioYAK4qCA
+4qCA4qCA4qCA4qCA4qCA4qCA4qCA4qCA4qCA4qKg4qKL4qO84qO/4qO/4qG/4qCZ4qKB4qO+4qO/
+4qGH4qCA4qCA4qOg4qO+4qO/4qCA4qCA4qCA4qO04qCD4qCA4qOA4qOA4qGI4qCJ4qCb4qK34qO+
+4qCA4qC74qO/4qO34qOE4qCZ4qCb4qOh4qOE4qG54qOn4qC54qGH4qKxCuKggOKggOKggOKggOKg
+gOKggOKggOKggOKggOKggOKiuOKgmOKgl+KjoOKjjOKgm+KggOKgueKgv+Kgv+Kjh+KggOKggOKg
+u+Kgv+Kgi+KggOKggOKgi+KggeKhlOKgmuKgieKjieKhi+KgkOKggOKggOKin+KggOKggOKgiOKg
+u+Kjv+Kgh+KjgOKgiOKgm+Kim+Kjv+Khl+Kig+KhjArioIDioIDioIDioIDioIDioIDioIDioIDi
+oIDio6Dio77iopvio7Tio7/io7/io6fioLDio7fiorDioYbio7bioqDioIDioLDio6bio6Tio6Ti
+o7TioLbioInioIDiorDio77io7/io7/io6bioIjioIDioIDioIDioIDioIDioIDioKjioZjior/i
+o7/io7/io7/io7/ioIfiobwK4qCA4qCA4qCA4qCA4qKA4qOA4qOk4qC24qKf4qOr4qO04qO/4qO/
+4qO/4qO/4qCP4qCw4qOk4qGk4qCU4qCA4qCA4qCA4qCA4qCJ4qCJ4qCJ4qCB4qCA4qCA4qCA4qCI
+4qC74qO/4qO/4qO/4qO34qOE4qCA4qCA4qCA4qCA4qCA4qCA4qCI4qCS4qCm4qCt4qCt4qCl4qCa
+CuKggOKggOKgtOKgnuKjm+KjreKjtOKjvuKjv+Kjv+Kjv+Kjv+Kgv+Kgm+KjoeKiuOKjt+KjjOKg
+k+KhgOKggOKggOKggOKggOKggOKggOKggOKggOKggOKgoOKggOKjpuKgkOKjjOKgu+Kiv+Kjv+Kj
+v+Kjt+KjpuKjrOKjk+KhkuKgpOKgpArioIDioIDioKTio63io63io63io63io63io63io63io63i
+oJDiorbioYPioInioJjioL/ioL/ioIjioYHio6Dio77io7/io7/ior/io7fio7bio4TioZnioILi
+or7io7/ioIDioJ/io6Hio6Tio43ioZvioLvior/io7/io7/io7/iob/ioLbiopIK4qCA4qCA4qCA
+4qCA4qCA4qCI4qCJ4qCB4qCA4qCA4qCA4qCA4qCI4qK/4qOk4qOA4qOA4qOm4qC/4qCb4qCJ4qKB
+4qGA4qCA4qKA4qOA4qGA4qCZ4qC54qC/4qO34qOm4qOk4qOe4qO/4qO/4qCf4qCA4qCY4qCT4qCy
+4qC24qC24qCS4qCL4qCBCuKggOKggOKggOKggOKggOKggOKggOKggOKggOKggOKggOKggOKggOKg
+gOKgiOKgk+Kgi+KjoeKhtOKigeKjtOKjv+Kjv+KjpuKjtuKjv+Kjt+KjhOKggOKituKjpOKjreKg
+jeKgm+Kgm+KggQrioIDioIDioIDioIDioIDioIDioIDioIDioIDioIDioIDioIDioIDioIDioIDi
+oIDioIDioIjiooHio77io7/io7/io7/io7/io7/io7/io7/io7/io7/ioITioJvioIEK4qCA4qCA
+4qCA4qCA4qCA4qCA4qCA4qCA4qCA4qCA4qCA4qCA4qCA4qCA4qCA4qCA4qCA4qCA4qCA4qCI4qCb
+4qC/4qC/4qCf4qC74qC/4qC/4qCf4qCLCg==
+"""
 
 def main():
     args = parse_arguments()
@@ -151,7 +240,7 @@ class NetRunnerServer:
 
     def run(self):
         """run() start NetRunner in the specified mode [server, client]"""
-        banner = """
+        server_text_banner = """
         ICAgIF8gICBfXyAgICAgX18gIF9fX18KICAgLyB8IC8gL19fICAvIC9fLyBfXyBcX18gIF9fX19f
         XyAgX19fXyAgX19fICBfX19fXwogIC8gIHwvIC8gXyBcLyBfXy8gL18vIC8gLyAvIC8gX18gXC8g
         X18gXC8gXyBcLyBfX18vCiAvIC98ICAvICBfXy8gL18vIF8sIF8vIC9fLyAvIC8gLyAvIC8gLyAv
@@ -161,7 +250,8 @@ class NetRunnerServer:
         ICAgYXV0aG9yOiBtaW5kMmhleAogKF8gICkgL19fXy8gXywgXy98IHwvIC8gL19fXy8gXywgXy8K
         LyAgXy9fX19fXy9fLyB8X3wgfF9fXy9fX19fXy9fLyB8X3wKL18vCg==
         """
-        print(base64.b64decode(banner).decode())
+        print(base64.b64decode(CYBERPUNK_SAMURAI_BANNER).decode())
+        print(base64.b64decode(server_text_banner).decode())
         print_cool_text("[!] Server mode...")
         self.listen()
 
@@ -260,20 +350,44 @@ class NetRunnerServer:
             """ i dont have idea neither"""
             pass
         elif nrc[0] == "ENUMERATE":
-            if len(nrc) > 1 and nrc[1] == "HELP":
-                response =  "$NRC ENUMERATE [SYSTEM|DRIVES |SOFTWARE|PROCESS|CRONJOBS|SERVICES]\n"
-                response += "               [TIMER |SOCKETS|DBUS    |NETWORK|USERS   |WPATHS  |SUIDGUID]\n"
-                response += "               [CAPAB |ACLS   |SHELLS  |SSH    |WOWFILES|WFILES  | ALL]\n"
-                response += "               [default ALL]\n"
-            else:
-                if platform.system() == "Linux":
-                    # https://book.hacktricks.xyz/linux-hardening/linux-privilege-escalation-checklist
+            if platform.system() == "Linux":
+                # https://book.hacktricks.xyz/linux-hardening/linux-privilege-escalation-checklist
+                enumeration_modules = {
+                    "SYSTEM":self.nrc_engine_enumerate_Linux_system,
+                    "DRIVES":self.nrc_engine_enumerate_Linux_drives,
+                    "SOFTWARE":self.nrc_engine_enumerate_Linux_software,
+                    "PROCESS":self.nrc_engine_enumerate_Linux_processes,
+                    "CRONJOBS":self.nrc_engine_enumerate_Linux_cronjobs,
+                    "SERVICES":self.nrc_engine_enumerate_Linux_services,
+                    "TIMER":self.nrc_engine_enumerate_Linux_timer,
+                    "SOCKETS":self.nrc_engine_enumerate_Linux_sockets,
+                    "DBUS":self.nrc_engine_enumerate_Linux_dbus,
+                    "NETWORK":self.nrc_engine_enumerate_Linux_network,
+                    "USERS":self.nrc_engine_enumerate_Linux_users,
+                    "WPATHS":self.nrc_engine_enumerate_Linux_writable_paths,
+                    "SUIDGUID":self.nrc_engine_enumerate_Linux_SUID_GUID,
+                    "CAPAB":self.nrc_engine_enumerate_Linux_capabilites,
+                    "ACLS":self.nrc_engine_enumerate_Linux_acls,
+                    "SHELLS":self.nrc_engine_enumerate_Linux_shell_sessions,
+                    "SSH":self.nrc_engine_enumerate_Linux_ssh,
+                    "INTFILES":self.nrc_engine_enumerate_Linux_interesting_files,
+                    "WFILES":self.nrc_engine_enumerate_Linux_writable_files,
+                    "ALL":self.nrc_engine_enumerate_Linux
+                }
+                if len(nrc) > 1:  # linux $NRC ENUMERATE HELP MESSAGE
+                    try:
+                        response = enumeration_modules[nrc[1]]()
+                    except:
+                        response =  "$NRC ENUMERATE [SYSTEM|DRIVES |SOFTWARE|PROCESS|CRONJOBS|SERVICES]\n"
+                        response += "               [TIMER |SOCKETS|DBUS    |NETWORK|USERS   |WPATHS  |SUIDGUID]\n"
+                        response += "               [CAPAB |ACLS   |SHELLS  |SSH    |INTFILES|WFILES  | ALL]\n"
+                        response += "               [default ALL]\n"
+                else:
                     response = self.nrc_engine_enumerate_Linux()
-                elif platform.system() == "Windows":
-                    # https://book.hacktricks.xyz/windows-hardening/checklist-windows-privilege-escalation
-                    #response = self.nrc_engine_enumerate_Windows()
-                    response = "WINDOWS ENUMERATION NOT IMPLEMENTED YET"
-                    pass
+            elif platform.system() == "Windows":
+                # https://book.hacktricks.xyz/windows-hardening/checklist-windows-privilege-escalation
+                #response = self.nrc_engine_enumerate_Windows()
+                response = "WINDOWS ENUMERATION NOT IMPLEMENTED YET"
         elif nrc[0] == "KEYLOGGER":
             pass
         elif nrc[0] == "LOOT":
@@ -305,7 +419,6 @@ class NetRunnerServer:
         response += self.nrc_engine_enumerate_interesting_files() + "\n"
         response += self.nrc_engine_enumerate_writable_files() + "\n"
         """
-
         return response 
 
     def nrc_engine_enumerate_Linux_system(self):
@@ -326,21 +439,21 @@ class NetRunnerServer:
         response += "[!] %-25s:  %20s\n" % (f"{AsciiColors.TEXT}OS INFORMATION{AsciiColors.ENDC}", "".join(platform.uname()))
 
         # searching for writable paths in $PATH  https://book.hacktricks.xyz/linux-hardening/privilege-escalation#path
-        response += "[!] %-25s:  %20s\n" % (f"{AsciiColors.TEXT}EXECUTABLE PATH{AsciiColors.ENDC}", ":".join(os.get_exec_path()))
+        response += "\n[!] %-25s:  %20s\n" % (f"{AsciiColors.TEXT}EXECUTABLE PATH{AsciiColors.ENDC}", ":".join(os.get_exec_path()))
         for i, path in enumerate(os.get_exec_path()):  
             if os.access(path, os.W_OK):
                 response += f"\t{AsciiColors.LEVEL_1}WRITABLE --> %-20s{AsciiColors.ENDC}\n" % (path)
 
         # searching for useful info in Env variables https://book.hacktricks.xyz/linux-hardening/privilege-escalation#env-info
-        response += "[!] %-25s: \n" % (f"{AsciiColors.TEXT}ENV VARIABLES{AsciiColors.ENDC}" )
+        response += "\n[!] %-25s: \n" % (f"{AsciiColors.TEXT}ENV VARIABLES{AsciiColors.ENDC}" )
         for env_var in os.environ:
             response += "\t%-40s %-s\n" % (env_var, os.getenv(env_var))
 
         # inspect kernel https://book.hacktricks.xyz/linux-hardening/privilege-escalation#kernel-exploits
-        response += "[!] %-25s:  %20s" % (f"{AsciiColors.TEXT}KERNEL INFORMATION{AsciiColors.ENDC}", execute("cat /proc/version"))
+        response += "\n[!] %-25s:  %20s" % (f"{AsciiColors.TEXT}KERNEL INFORMATION{AsciiColors.ENDC}", execute("cat /proc/version"))
 
         # inspect sudo https://book.hacktricks.xyz/linux-hardening/privilege-escalation#sudo-version
-        response += "[!] %-25s:\n" % (f"{AsciiColors.TEXT}SUDO INFORMATION{AsciiColors.ENDC}")
+        response += "\n[!] %-25s:\n" % (f"{AsciiColors.TEXT}SUDO INFORMATION{AsciiColors.ENDC}")
         for row in execute("sudo -V").split("\n"):
             response += f"\t{row}\n"
             
@@ -354,7 +467,7 @@ class NetRunnerServer:
                 response += f"\t{signature}\n"
 
         # checking more system information https://book.hacktricks.xyz/linux-hardening/privilege-escalation#more-system-enumeration
-        response += "[!] %-25s:  %20s\n" % (f"{AsciiColors.TEXT}DATE{AsciiColors.ENDC}", execute("date"))  # date
+        response += "\n[!] %-25s:  %20s\n" % (f"{AsciiColors.TEXT}DATE{AsciiColors.ENDC}", execute("date"))  # date
 
         response += "[!] %-25s:\n" % (f"{AsciiColors.TEXT}SYSTEM STATS{AsciiColors.ENDC}")  # lsblk
         for row in execute("lsblk").split("\n"):
@@ -486,15 +599,26 @@ class NetRunnerServer:
     
     def nrc_engine_enumerate_Linux_processes(self):
         """
-        nrc_engine_enumerate_processes()
-        ...
+        https://book.hacktricks.xyz/linux-hardening/privilege-escalation#processes
+        nrc_engine_enumerate_Linux_processes()
+        use psutils to enumerate system process
         """
-        response = "============ %20s ================\n" % ("SOFTWARE INFO".center(20))
+        separator = "="*30 + "%30s" + "="*30 + "\n"
+        response = separator % (f"{AsciiColors.TEXT}PROCESSES{AsciiColors.ENDC}".center(30))                
 
         # enumerating active processes
-        response += "%20s\n" % ("Sudo information".center(20))
-        for row in execute("ps aux").split("\n"):
-            response += f"\t{row}\n"
+        response += "\n[!] %-25s:\n" % (f"{AsciiColors.TEXT}PROCESS MONITOR{AsciiColors.ENDC}")   
+        pid_list_log = list()
+        for i in range(20):  # 10 iterations equals 10 seconds
+            for pid in psutil.pids():
+                if pid not in pid_list_log:
+                    try:
+                        process = psutil.Process(pid)
+                    except: 
+                        continue
+                    pid_list_log.append(pid)
+                    response += f"\t{pid} {process.name()} {process.cmdline()}\n"
+            sleep(1)        
 
         return response
     
@@ -553,7 +677,7 @@ class NetRunnerClient():
 
     def run(self):
         """run() start NetRunner in the specified mode [server, client]"""
-        banner = """
+        client_text_banner = """
         ICAgIF8gICBfXyAgICAgX18gIF9fX18KICAgLyB8IC8gL19fICAvIC9fLyBfXyBcX18gIF9fX19f
         XyAgX19fXyAgX19fICBfX19fXwogIC8gIHwvIC8gXyBcLyBfXy8gL18vIC8gLyAvIC8gX18gXC8g
         X18gXC8gXyBcLyBfX18vCiAvIC98ICAvICBfXy8gL18vIF8sIF8vIC9fLyAvIC8gLyAvIC8gLyAv
@@ -562,7 +686,8 @@ class NetRunnerClient():
         LyAgIC8gLyAvIF8gXC8gX18gXC8gX18vICAgICBhdXRob3I6IG1pbmQyaGV4Ci8gL19fXy8gLyAv
         ICBfXy8gLyAvIC8gL18KXF9fX18vXy9fL1xfX18vXy8gL18vXF9fLwo=
         """
-        print(base64.b64decode(banner).decode())
+        print(base64.b64decode(CYBERPUNK_SAMURAI_BANNER).decode())
+        print(base64.b64decode(client_text_banner).decode())
         print_cool_text("[!] Client mode...")
 
         try:  # trying to connect to target on the specified port
@@ -639,7 +764,8 @@ if __name__ == "__main__":
 # TODO: Implementar sistema de contrasena para el servidor
 # TODO: Implementar debug/verbose
 # TODO: Implementar cifrado de datos para el envio de la comunicacion
-# TODO: Implementar 
+# TODO: Implementar Persistencia, insertar revshell en el host
+# TODO: Implementar LOOTing, descargar archivos con extension especifica
 
 ### HACK
 
