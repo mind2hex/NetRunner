@@ -113,8 +113,10 @@ def random_string(length):
 
     
 def execute(cmd):
-    """execute(cmd)
-    executes cmd in the operating system and returns its output after execution
+    """
+    execute(cmd): execute system commands
+    returns the output of the command if success
+    returns "[X] Error: error_description_message" if fail
     """
     cmd = cmd.strip()
     if not cmd:
@@ -243,7 +245,7 @@ class NetRunnerServer:
         in function nrc_engine (net runner command engine)
         """
 
-        if nrc[0] == "HELP":
+        if len(nrc) == 0 or nrc[0] == "HELP":
             response = """
             HELP       : print this help message
             UPLOAD     : uploads a file, you have to specify path
@@ -272,6 +274,10 @@ class NetRunnerServer:
                     #response = self.nrc_engine_enumerate_Windows()
                     response = "WINDOWS ENUMERATION NOT IMPLEMENTED YET"
                     pass
+        elif nrc[0] == "KEYLOGGER":
+            pass
+        elif nrc[0] == "LOOT":
+            pass
         else:
             response = "INVALID NRC COMMAND, USE $NRC HELP" 
 
@@ -280,8 +286,8 @@ class NetRunnerServer:
     def nrc_engine_enumerate_Linux(self):
         response = self.nrc_engine_enumerate_Linux_system()
         response += self.nrc_engine_enumerate_Linux_drives()
+        response += self.nrc_engine_enumerate_Linux_software()
         """
-        response += self.nrc_engine_enumerate_software()  + "\n"
         response += self.nrc_engine_enumerate_processes() + "\n"
         response += self.nrc_engine_enumerate_cronjobs()  + "\n"
         response += self.nrc_engine_enumerate_services()  + "\n"
@@ -303,7 +309,9 @@ class NetRunnerServer:
         return response 
 
     def nrc_engine_enumerate_Linux_system(self):
-        """ nrc_engine_enumerate_system() performs system enumeration
+        """ 
+        https://book.hacktricks.xyz/linux-hardening/privilege-escalation#system-information
+        nrc_engine_enumerate_system() performs system enumeration
         - architecture and release info
         - writable paths in $PATH
         - kernel exploits
@@ -320,7 +328,7 @@ class NetRunnerServer:
         # searching for writable paths in $PATH  https://book.hacktricks.xyz/linux-hardening/privilege-escalation#path
         response += "[!] %-25s:  %20s\n" % (f"{AsciiColors.TEXT}EXECUTABLE PATH{AsciiColors.ENDC}", ":".join(os.get_exec_path()))
         for i, path in enumerate(os.get_exec_path()):  
-            if os.access("/home/th3g3ntl3man", os.W_OK):
+            if os.access(path, os.W_OK):
                 response += f"\t{AsciiColors.LEVEL_1}WRITABLE --> %-20s{AsciiColors.ENDC}\n" % (path)
 
         # searching for useful info in Env variables https://book.hacktricks.xyz/linux-hardening/privilege-escalation#env-info
@@ -384,11 +392,11 @@ class NetRunnerServer:
     
     def nrc_engine_enumerate_Linux_drives(self):
         """
+        https://book.hacktricks.xyz/linux-hardening/privilege-escalation#drives
         nrc_engine_enumerate_drives() 
         returns info about mounted and unmounted drvies devices
         """
         separator = "="*30 + "%30s" + "="*30 + "\n"
-        
         response = separator % (f"{AsciiColors.TEXT}DRIVES INFORMATION{AsciiColors.ENDC}".center(30))
 
         # list mounted drives
@@ -410,17 +418,70 @@ class NetRunnerServer:
     
     def nrc_engine_enumerate_Linux_software(self):
         """
+        https://book.hacktricks.xyz/linux-hardening/linux-privilege-escalation-checklist#installed-software
         nrc_engine_enumerate_software()
         returns info about any software useful to a pentesting installed 
         in machine which server is executing on
         """
-        response = "============ %20s ================\n" % ("SOFTWARE INFO".center(20))
-
-        # search useful software (compilers, interpreters, networking tools, etc)
-        useful_tools = ["bash", "python"]
+        separator = "="*30 + "%30s" + "="*30 + "\n"
+        response = separator % (f"{AsciiColors.TEXT}SOFTWARE INFORMATION{AsciiColors.ENDC}".center(30))        
+        
+        # https://book.hacktricks.xyz/linux-hardening/privilege-escalation#useful-software
+        response += "[!] %-25s:\n" % (f"{AsciiColors.TEXT}USEFUL TOOLS{AsciiColors.ENDC}")   
+        useful_tools = [
+            'nmap', 'aws', 'nc', 'ncat', 'netcat', 
+            'nc.traditional', 'wget', 'curl', 'ping', 
+            'gcc', 'g++', 'make', 'gdb', 'base64', 
+            'socat', 'python', 'python2', 'python3', 
+            'python2.7', 'python2.6', 'python3.6', 
+            'python3.7', 'perl', 'php', 'ruby', 'xterm', 
+            'doas', 'sudo', 'fetch', 'docker', 'lxc', 
+            'ctr', 'runc', 'rkt', 'kubectl'
+        ]
         for i, tool in enumerate(useful_tools):
-            response += "%s\t%s"%(tool, execute(f"which {tool}"))
+            tmp_text = execute(f"which {tool}")
+            if "[X] Error" in tmp_text:
+                tmp_text = "[NOT FOUND]\n"
+            response += "\t%-15s %s"%(tool, tmp_text)
 
+
+        # https://book.hacktricks.xyz/linux-hardening/privilege-escalation#vulnerable-software-installed
+        response += "\n[!] %-25s:\n" % (f"{AsciiColors.TEXT}INSTALLED SOFTWARE{AsciiColors.ENDC}")   
+
+        result = execute("dpkg -l")  # trying with dpkg
+        if "[X] Error" not in result: 
+            package_list = result.split('\n')
+            for package in package_list[5:]:  # first 5 lines are metadata to be ignored
+                if package:
+                    parts = package.split()
+                    package_name = parts[1]
+                    version = parts[2]
+                    response += "\t%-40s %s\n" %(package_name, version)
+        
+        else:
+            result = execute ("rpm -l")  # trying with rpm
+            if "[X] Error" not in result:
+                package_list = result.split('\n')
+                for package in package_list:
+                    if package:
+                        parts = package.split('-')
+                        package_name = '-'.join(parts[:-2])
+                        version = '-'.join(parts[-2:])
+                        response += "\t%-40s %s\n" %(package_name, version)
+            else:
+                result = execute ("pacman -Q")  # trying with pacman
+                if "[X] Error" not in result:
+                    package_list = result.split('\n')
+                    for package in package_list:
+                        if package:
+                            parts = package.split()
+                            package_name = parts[0]
+                            version = parts[1]
+                            response += "\t%-40s %s\n" %(package_name, version)
+                else:
+                    # What the hell package manager are you using?
+                    pass
+        
         return response
     
     def nrc_engine_enumerate_Linux_processes(self):
@@ -571,6 +632,7 @@ if __name__ == "__main__":
 # FIXME: Cuando se ejecutan comandos interactivos como una shell o un ping sin final, el programa queda congelado...
 # FIXME: Intentar usar librerias estandar para evitar el uso de pip install
 
+
 ### TODO
 # TODO: Terminar de implementar la seleccion de enumeracion en la linea 265
 # TODO: Implementar el NRC Engine para la ejecucion de custom commands en servidor y cliente
@@ -579,7 +641,7 @@ if __name__ == "__main__":
 # TODO: Implementar cifrado de datos para el envio de la comunicacion
 # TODO: Implementar 
 
-
 ### HACK
+
 # HACK: Mejorar output, mas colorido...
 # HACK: Mejorar la documentacion 
