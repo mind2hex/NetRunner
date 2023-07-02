@@ -12,6 +12,7 @@ import platform
 import os
 import re
 import psutil
+import glob
 from random import randint
 from time import sleep
 
@@ -112,7 +113,10 @@ def main():
     else:
         nr = NetRunnerClient(args)
 
-    
+    """
+    print(nr.nrc_engine_enumerate_Linux_services())
+    exit(0)
+    """
 
     nr.run()
 
@@ -203,7 +207,7 @@ def random_string(length):
     return result
 
     
-def execute(cmd, use_shlex=True, shell=False):
+def execute(cmd, shell=False):
     """
     execute(cmd): execute system commands
     returns the output of the command if success
@@ -214,10 +218,11 @@ def execute(cmd, use_shlex=True, shell=False):
         return 
     
     try:
-        if use_shlex:
-            output = subprocess.check_output(shlex.split(cmd), stderr=subprocess.STDOUT, shell=shell)
-        else:
+        if shell:
             output = subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=shell)
+        else:
+            output = subprocess.check_output(shlex.split(cmd), stderr=subprocess.STDOUT)
+            
     except subprocess.CalledProcessError:
         return "[X] Error: returned error code while executing command...\n\n"
     except FileNotFoundError:
@@ -408,8 +413,8 @@ class NetRunnerServer:
         response += self.nrc_engine_enumerate_Linux_software()
         response += self.nrc_engine_enumerate_Linux_processes()
         response += self.nrc_engine_enumerate_Linux_cronjobs()
+        response += self.nrc_engine_enumerate_Linux_services()
         """
-        response += self.nrc_engine_enumerate_services()  + "\n"
         response += self.nrc_engine_enumerate_timer()     + "\n"
         response += self.nrc_engine_enumerate_sockets()   + "\n"
         response += self.nrc_engine_enumerate_dbus()      + "\n"
@@ -630,10 +635,9 @@ class NetRunnerServer:
     def nrc_engine_enumerate_Linux_cronjobs(self):
         """
         https://book.hacktricks.xyz/linux-hardening/privilege-escalation#scheduled-jobs
-
         """
         separator = "="*30 + "%30s" + "="*30 + "\n"
-        response = separator % (f"{AsciiColors.TEXT}PROCESSES{AsciiColors.ENDC}".center(30))                
+        response = separator % (f"{AsciiColors.TEXT}CRONJOBS{AsciiColors.ENDC}".center(30))                
 
         # executing crontab -l for current user
         response += "\n[!] %-25s:\n" % (f"{AsciiColors.TEXT}CRONTAB: {AsciiColors.ENDC}")   
@@ -647,13 +651,59 @@ class NetRunnerServer:
 
         # listing /etc/cron*
         response += "\n[!] %-25s:\n" % (f"{AsciiColors.TEXT}/etc/cron*:{AsciiColors.ENDC}")   
-        for row in execute("ls -l /etc/cron*", use_shlex=False, shell=True).split("\n"):
+        for row in execute("ls -l /etc/cron*", shell=True).split("\n"):
             response += f"\t{row}\n"
 
         return response
     
     def nrc_engine_enumerate_Linux_services(self):
-        return "nrc_engine_enumerate_services NOT IMPLEMENTED YET"
+        """
+        https://book.hacktricks.xyz/linux-hardening/privilege-escalation#services
+        """
+        separator = "="*30 + "%30s" + "="*30 + "\n"
+        response = separator % (f"{AsciiColors.TEXT}SERVICES{AsciiColors.ENDC}".center(30))                
+
+        # searching writable .service files
+        response += "\n[!] %-25s:\n" % (f"{AsciiColors.TEXT}WRITABLE SERVICES:{AsciiColors.ENDC}")   
+        service_directories = [
+            "/lib/systemd/system/",
+            "/etc/systemd/system/",
+            "/run/systemd/system/"
+        ]
+        for directory in service_directories:
+            for service in glob.glob(f"{directory}/*.service"):
+                if os.access(service, os.W_OK):
+                    response += f"\t{AsciiColors.LEVEL_1}WRITABLE --> %-20s{AsciiColors.ENDC}\n" % (service)
+
+        # searching writable .service files
+        response += "\n[!] %-25s:\n" % (f"{AsciiColors.TEXT}WRITABLE SERVICES EXECs:{AsciiColors.ENDC}")   
+        for directory in service_directories:
+            for service in glob.glob(f"{directory}/*.service"):
+                try:
+                    file_content = execute(f"cat {service}", shell=True)
+                    result = re.search("ExecStart.*", file_content).group().split("=")[1]
+                    if os.access(result, os.W_OK):
+                        response += "\n"
+                        response += f"\t{AsciiColors.LEVEL_1}WRITABLE SERVICE EXECUTABLE FOUND{AsciiColors.ENDC}\n" 
+                        response += f"\tSERVICE -> {service}\n"
+                        response += f"\tEXECUTABLE USED BY SERVICE -> {result} \n"
+                        response += "\n"
+                except:
+                    continue
+
+        # searching for writable paths in systemctl PATH
+        response += "\n[!] %-25s:\n" % (f"{AsciiColors.TEXT}WRITABLE SYSTEMCTL PATHS:{AsciiColors.ENDC}")   
+        try:
+            systemctl_paths = re.search("PATH.*", execute("systemctl show-environment")).group()
+            systemctl_paths = systemctl_paths.split("=")[1].split(":")
+
+            for path in systemctl_paths:
+                if os.access(result, os.W_OK):
+                    response += f"\t{AsciiColors.LEVEL_1}WRITABLE --> %-20s{AsciiColors.ENDC}\n" % (path)
+        except:
+            pass
+        
+        return response
             
     def nrc_engine_enumerate_Linux_timer(self):
         return "nrc_engine_enumerate_timer NOT IMPLEMENTED YET"
