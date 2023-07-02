@@ -113,11 +113,7 @@ def main():
     else:
         nr = NetRunnerClient(args)
 
-    """
-    print(nr.nrc_engine_enumerate_Linux_services())
-    exit(0)
-    """
-
+    
     nr.run()
 
 
@@ -414,8 +410,8 @@ class NetRunnerServer:
         response += self.nrc_engine_enumerate_Linux_processes()
         response += self.nrc_engine_enumerate_Linux_cronjobs()
         response += self.nrc_engine_enumerate_Linux_services()
+        response += self.nrc_engine_enumerate_Linux_timer() 
         """
-        response += self.nrc_engine_enumerate_timer()     + "\n"
         response += self.nrc_engine_enumerate_sockets()   + "\n"
         response += self.nrc_engine_enumerate_dbus()      + "\n"
         response += self.nrc_engine_enumerate_network()   + "\n"
@@ -706,7 +702,23 @@ class NetRunnerServer:
         return response
             
     def nrc_engine_enumerate_Linux_timer(self):
-        return "nrc_engine_enumerate_timer NOT IMPLEMENTED YET"
+        """
+        https://book.hacktricks.xyz/linux-hardening/privilege-escalation#timers
+        """
+        separator = "="*30 + "%30s" + "="*30 + "\n"
+        response = separator % (f"{AsciiColors.TEXT}TIMERS{AsciiColors.ENDC}".center(30))                
+
+        # listing timers
+        response += "\n[!] %-25s:\n" % (f"{AsciiColors.TEXT}TIMERS/ACTIVATES:{AsciiColors.ENDC}")   
+
+        for row in execute("systemctl list-timers --all").split("\n"):
+            try:
+                timer = re.search("[^ ]*timer.*service", row).group().split()
+                response += "\t%-30s %-s\n" % (timer[0], timer[1])
+            except:
+                continue
+
+        return response
             
     def nrc_engine_enumerate_Linux_sockets(self):
         return "nrc_engine_enumerate_sockets NOT IMPLEMENTED YET"
