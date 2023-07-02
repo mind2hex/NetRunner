@@ -112,6 +112,8 @@ def main():
     else:
         nr = NetRunnerClient(args)
 
+    
+
     nr.run()
 
 
@@ -201,7 +203,7 @@ def random_string(length):
     return result
 
     
-def execute(cmd):
+def execute(cmd, use_shlex=True, shell=False):
     """
     execute(cmd): execute system commands
     returns the output of the command if success
@@ -212,7 +214,10 @@ def execute(cmd):
         return 
     
     try:
-        output = subprocess.check_output(shlex.split(cmd), stderr=subprocess.STDOUT)
+        if use_shlex:
+            output = subprocess.check_output(shlex.split(cmd), stderr=subprocess.STDOUT, shell=shell)
+        else:
+            output = subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=shell)
     except subprocess.CalledProcessError:
         return "[X] Error: returned error code while executing command...\n\n"
     except FileNotFoundError:
@@ -401,9 +406,9 @@ class NetRunnerServer:
         response = self.nrc_engine_enumerate_Linux_system()
         response += self.nrc_engine_enumerate_Linux_drives()
         response += self.nrc_engine_enumerate_Linux_software()
+        response += self.nrc_engine_enumerate_Linux_processes()
+        response += self.nrc_engine_enumerate_Linux_cronjobs()
         """
-        response += self.nrc_engine_enumerate_processes() + "\n"
-        response += self.nrc_engine_enumerate_cronjobs()  + "\n"
         response += self.nrc_engine_enumerate_services()  + "\n"
         response += self.nrc_engine_enumerate_timer()     + "\n"
         response += self.nrc_engine_enumerate_sockets()   + "\n"
@@ -607,7 +612,7 @@ class NetRunnerServer:
         response = separator % (f"{AsciiColors.TEXT}PROCESSES{AsciiColors.ENDC}".center(30))                
 
         # enumerating active processes
-        response += "\n[!] %-25s:\n" % (f"{AsciiColors.TEXT}PROCESS MONITOR{AsciiColors.ENDC}")   
+        response += "\n[!] %-25s:\n" % (f"{AsciiColors.TEXT}PROCESS MONITOR: (20 secs){AsciiColors.ENDC}")   
         pid_list_log = list()
         for i in range(20):  # 10 iterations equals 10 seconds
             for pid in psutil.pids():
@@ -623,7 +628,29 @@ class NetRunnerServer:
         return response
     
     def nrc_engine_enumerate_Linux_cronjobs(self):
-        return "nrc_engine_enumerate_cronjobs NOT IMPLEMENTED YET"
+        """
+        https://book.hacktricks.xyz/linux-hardening/privilege-escalation#scheduled-jobs
+
+        """
+        separator = "="*30 + "%30s" + "="*30 + "\n"
+        response = separator % (f"{AsciiColors.TEXT}PROCESSES{AsciiColors.ENDC}".center(30))                
+
+        # executing crontab -l for current user
+        response += "\n[!] %-25s:\n" % (f"{AsciiColors.TEXT}CRONTAB: {AsciiColors.ENDC}")   
+        for row in execute("crontab -l").split("\n"):
+            response += f"\t{row}\n"
+
+        # showing /etc/crontab 
+        response += "\n[!] %-25s:\n" % (f"{AsciiColors.TEXT}/etc/crontab:{AsciiColors.ENDC}")   
+        for row in execute("cat /etc/crontab").split("\n"):
+            response += f"\t{row}\n"
+
+        # listing /etc/cron*
+        response += "\n[!] %-25s:\n" % (f"{AsciiColors.TEXT}/etc/cron*:{AsciiColors.ENDC}")   
+        for row in execute("ls -l /etc/cron*", use_shlex=False, shell=True).split("\n"):
+            response += f"\t{row}\n"
+
+        return response
     
     def nrc_engine_enumerate_Linux_services(self):
         return "nrc_engine_enumerate_services NOT IMPLEMENTED YET"
