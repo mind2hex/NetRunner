@@ -123,25 +123,26 @@ def parse_arguments():
     parser = argparse.ArgumentParser(
         prog="./netrunner.py",
         usage="./netrunner.py [options] ",
-        description="python net tool",
+        description="Remote Administration Tool",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=textwrap.dedent("""Examples:
-        # start a listener and spawn a shell to clients 
-        ./netrunner.py -t 192.168.0.1 -p 5555 -l -s  
+        # start a NetRunner in servermode 
+        ./NetRunner.py -t 192.168.0.1 -p 5555 -l 
 
-        # start a listener and send back to clients the output of the specified command 
-        ./netrunner.py -t 192.168.0.1 -p 5555 -l -c "cat /etc/passwd"  
+        # conect to a NetRunner server using NetRunner in client mode
+        ./netrunner.py -t 192.168.0.1 -p 5555 
 
-        # connect to a server using client mode                 
-        ./netrunner.pt -t 192.168.0.1 -p 5555                                  
+        
+        NetRunnerCommands Engine
+        # To use NRC Engine, we should first connect to a NR server using NR client
 
-        # using NetRunnerCommands Engine
-        # To use NRC Engine, a server must be started in shell mode with -s argument
-        netrunner: #> $NRC {COMMAND} [OPTIONS]     # BASIC USAGE
-        netrunner: #> $NRC FILE_UPLOAD /local/filepath  # FILE UPLOAD
-        netrunner: #> $NRC FILE_DOWNLOAD 
+        # SHOW NRC HELP
+        netrunner: #> $NRC HELP   
 
-        https://github.com/mind2hex/
+        # SHOW NRC MODULE HELP
+        netrunner: #> $NRC [MODULE_NAME] HELP
+
+https://github.com/mind2hex/
         """
         )
     )
