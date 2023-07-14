@@ -113,7 +113,6 @@ def main():
     else:
         nr = NetRunnerClient(args)
 
-    
     nr.run()
 
 
@@ -227,6 +226,37 @@ def execute(cmd, shell=False):
     
     return output.decode()
 
+
+def find_files(pattern, search_path="/", writable=False, readable=False):
+    """
+    find_files(...)
+    return a list of absolute path files that match with the specified pattern
+
+    pattern:      specify the pattern to find matchs in search_path
+    search_path:  specify path in which search will be done, default root dir /
+    writable:     if True, only show writable files. Can be used with readable
+    readable:     if True, only show readable files.
+    """
+
+    result = []
+
+    for root, dir, files in os.walk(search_path):
+        for file in files:
+            if re.search(pattern, file) is not None:
+                matched_file = os.path.join(root,file)
+
+                if writable:  # append only writable files if specified
+                    if os.access(matched_file, os.W_OK):
+                        result.append(matched_file)
+
+                elif readable == True:  # append only readable files if specified
+                    if os.access(matched_file, os.R_OK):
+                        result.append(matched_file)
+
+                else:  # appends all matched files [by default]
+                    result.append(matched_file)
+    
+    return result
 
 class AsciiColors:
     TEXT     = "\033[94m"
@@ -412,10 +442,10 @@ class NetRunnerServer:
         response += self.nrc_engine_enumerate_Linux_cronjobs()
         response += self.nrc_engine_enumerate_Linux_services()
         response += self.nrc_engine_enumerate_Linux_timer() 
+        response += self.nrc_engine_enumerate_Linux_sockets()
+        response += self.nrc_engine_enumerate_Linux_dbus()
+        response += self.nrc_engine_enumerate_Linux_network()
         """
-        response += self.nrc_engine_enumerate_sockets()   + "\n"
-        response += self.nrc_engine_enumerate_dbus()      + "\n"
-        response += self.nrc_engine_enumerate_network()   + "\n"
         response += self.nrc_engine_enumerate_users()     + "\n"
         response += self.nrc_engine_enumerate_writable_paths() + "\n"
         response += self.nrc_engine_enumerate_SUID_GUID() + "\n"
@@ -722,13 +752,133 @@ class NetRunnerServer:
         return response
             
     def nrc_engine_enumerate_Linux_sockets(self):
-        return "nrc_engine_enumerate_sockets NOT IMPLEMENTED YET"
+        """
+        https://book.hacktricks.xyz/linux-hardening/privilege-escalation#sockets
+        """
+        separator = "="*30 + "%30s" + "="*30 + "\n"
+        response = separator % (f"{AsciiColors.TEXT}SOCKETS{AsciiColors.ENDC}".center(30))                
+
+        # https://book.hacktricks.xyz/linux-hardening/privilege-escalation#writable-.socket-files
+        # searching for writable socket files
+        response += "\n[!] %-25s:\n" % (f"{AsciiColors.TEXT}WRITABLE SOCKETS:{AsciiColors.ENDC}")   
+        writable_socket_files = find_files(".*\.socket", "/", writable=True)
+        for file in writable_socket_files:
+            response += f"\t{AsciiColors.LEVEL_1}WRITABLE --> %-20s{AsciiColors.ENDC}\n" % (file)            
+
+        # https://book.hacktricks.xyz/linux-hardening/privilege-escalation#writable-sockets
+        # writable sockets
+        ##### NOT COMPLETED
+
+        # https://book.hacktricks.xyz/linux-hardening/privilege-escalation#enumerate-unix-sockets
+        # enumerating unix sockets
+        response += "\n[!] %-25s:\n" % (f"{AsciiColors.TEXT}UNIX SOCKETS:{AsciiColors.ENDC}")   
+        for line in execute("netstat -a -p --unix | tail -n +5 ").split("\n"):
+            response += f"\t {line}\n"
+
+        # https://book.hacktricks.xyz/linux-hardening/privilege-escalation#raw-connection
+        # raw connections ??
+        ##### NOT COMPLETED
+
+        # https://book.hacktricks.xyz/linux-hardening/privilege-escalation#http-sockets
+        # HTTP sockets ??
+        ##### NOT COMPLETED
+
+        # https://book.hacktricks.xyz/linux-hardening/privilege-escalation#writable-docker-socket
+        # writable docker sockets
+        ##### NOT COMPLETED
+
+        return response
             
     def nrc_engine_enumerate_Linux_dbus(self):
-        return "nrc_engine_enumerate_dbus NOT IMPLEMENTED YET"
+        """
+        https://book.hacktricks.xyz/linux-hardening/privilege-escalation#d-bus
+        https://book.hacktricks.xyz/linux-hardening/privilege-escalation/d-bus-enumeration-and-command-injection-privilege-escalation
+        """
+        separator = "="*30 + "%30s" + "="*30 + "\n"
+        response = separator % (f"{AsciiColors.TEXT}DBUS{AsciiColors.ENDC}".center(30))                
+
+        # https://book.hacktricks.xyz/linux-hardening/privilege-escalation/d-bus-enumeration-and-command-injection-privilege-escalation#list-service-objects
+        # listing opened D-BUS interfaces
+        ##### NOT COMPLETED
+
+        # https://book.hacktricks.xyz/linux-hardening/privilege-escalation/d-bus-enumeration-and-command-injection-privilege-escalation#service-object-info
+        # enumerating information from dbus interfaces
+        ##### NOT COMPLETED
+
+        # https://book.hacktricks.xyz/linux-hardening/privilege-escalation/d-bus-enumeration-and-command-injection-privilege-escalation#list-interfaces-of-a-service-object
+        # enumerating interfaces of a service object
+        ##### NOT COMPLETED
+
+        # https://book.hacktricks.xyz/linux-hardening/privilege-escalation/d-bus-enumeration-and-command-injection-privilege-escalation#monitor-capture-interface
+        # trying to monitor a D-BUS communication
+        ##### NOT COMPLETED
+
+        # 
+        # exploiting dbus
+        ##### NOT COMPLETED
+        return response
             
     def nrc_engine_enumerate_Linux_network(self):
-        return "nrc_engine_enumerate_network NOT IMPLEMENTED YET"
+        """
+        https://book.hacktricks.xyz/linux-hardening/privilege-escalation#network
+        """
+        separator = "="*30 + "%30s" + "="*30 + "\n"
+        response = separator % (f"{AsciiColors.TEXT}NETWORK{AsciiColors.ENDC}".center(30)) 
+
+        # https://book.hacktricks.xyz/linux-hardening/privilege-escalation#generic-enumeration
+        # hostname, hosts and DNS
+        response += "\n[!] %-25s:\n" % (f"{AsciiColors.TEXT} GENERAL NETWORK INFORMATION FILES {AsciiColors.ENDC}")   
+        network_files = [
+            "/etc/hostname",
+            "/etc/hosts",
+            "/etc/resolv.conf",
+            "/etc/inetd.conf",
+            "/etc/xinetd.conf",
+            "/etc/networks"
+        ]
+        for file in network_files:
+            response += f"\t{AsciiColors.TEXT}---> {file}{AsciiColors.ENDC}\n"
+            for line in execute(f"cat {file}").split("\n"):
+                response += f"\t{line}\n" 
+
+        # network interfaces
+        response += "\n[!] %-25s:\n" % (f"{AsciiColors.TEXT} NETWORK INTERFACES {AsciiColors.ENDC}")   
+        for line in execute("ifconfig -a").split("\n"):
+            response += f"\t{line}\n" 
+
+        # arp table
+        response += "\n[!] %-25s:\n" % (f"{AsciiColors.TEXT} ARP TABLE {AsciiColors.ENDC}")   
+        for line in execute("arp -e").split("\n"):
+            response += f"\t{line}\n" 
+
+        # route
+        response += "\n[!] %-25s:\n" % (f"{AsciiColors.TEXT} ROUTE {AsciiColors.ENDC}")   
+        for line in execute("route").split("\n"):
+            response += f"\t{line}\n" 
+
+        # enumerating iptables rules
+        response += "\n[!] %-25s:\n" % (f"{AsciiColors.TEXT} IPTABLES RULES {AsciiColors.ENDC}")   
+        for line in execute("iptables -L").split("\n"):
+            response += f"\t{line}\n" 
+
+        # enumerating files used by network services
+        response += "\n[!] %-25s:\n" % (f"{AsciiColors.TEXT} FILES USED BY NETWORK SERVICES {AsciiColors.ENDC}")   
+        for line in execute("lsof -i").split("\n"):
+            response += f"\t{line}\n" 
+
+        # https://book.hacktricks.xyz/linux-hardening/privilege-escalation#open-ports
+        # enumerating open ports
+        response += "\n[!] %-25s:\n" % (f"{AsciiColors.TEXT}OPEN PORTS:{AsciiColors.ENDC}")   
+        for line in execute("netstat -punta").split("\n"):
+            response += f"\t{line}\n" 
+
+        # https://book.hacktricks.xyz/linux-hardening/privilege-escalation#sniffing
+        # check if can sniff 
+        response += "\n[!] %-25s:\n" % (f"{AsciiColors.TEXT}SNIFF:{AsciiColors.ENDC}")   
+        for line in execute("timeout 1 tcpdump -i wlan0").split("\n"):
+            response += f"\t{line}\n" 
+
+        return response
     
     def nrc_engine_enumerate_Linux_users(self):
         return "nrc_engine_enumerate_users NOT IMPLEMENTED YET"
@@ -841,23 +991,20 @@ class NetRunnerClient():
 if __name__ == "__main__":
     main()
 
+### TODO
+# TODO: el NRC Engine para la ejecucion de custom commands en servidor y cliente
+# TODO: sistema de contrasena para el servidor
+# TODO: debug/verbose
+# TODO: cifrado de datos para el envio de la comunicacion
+# TODO: Persistencia, insertar revshell en el host
+# TODO: LOOTing, descargar archivos con extension especifica
+# TODO: barra de carga mientras se espera respuesta del servidor
 
 ### FIXME
 # FIXME: Cuando se inicia una shell desde NRClient, no se puede navegar entre directorios
 # FIXME: Cuando se ejecutan comandos interactivos como una shell o un ping sin final, el programa queda congelado...
 # FIXME: Intentar usar librerias estandar para evitar el uso de pip install
 
-
-### TODO
-# TODO: Terminar de implementar la seleccion de enumeracion en la linea 265
-# TODO: Implementar el NRC Engine para la ejecucion de custom commands en servidor y cliente
-# TODO: Implementar sistema de contrasena para el servidor
-# TODO: Implementar debug/verbose
-# TODO: Implementar cifrado de datos para el envio de la comunicacion
-# TODO: Implementar Persistencia, insertar revshell en el host
-# TODO: Implementar LOOTing, descargar archivos con extension especifica
-
 ### HACK
-
 # HACK: Mejorar output, mas colorido...
 # HACK: Mejorar la documentacion 
