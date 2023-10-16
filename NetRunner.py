@@ -388,12 +388,13 @@ class NetRunnerServer:
                 continue
                 
             if client_response.startswith("$NRC"):  # NRC engine commands 
-                msg = self.nrc_engine(client_response)  
+                msg = self.nrc_engine(client_response)
             else:  # executing normal os command
                 msg = execute(client_response)
 
             if msg:
-                client_socket.send(msg.encode())
+                msg = msg.encode()
+                client_socket.send(msg)
 
     def recv_data_from_client(self, client_socket):
         response = ""
@@ -412,6 +413,8 @@ class NetRunnerServer:
         """
         nrc stands for net runner command and is the command used
         in function nrc_engine (net runner command engine)
+        Ex:
+        $NRC HELP
         """
 
         nrc = nrc.rstrip("\n").split(" ")
@@ -427,10 +430,10 @@ class NetRunnerServer:
 
         elif nrc[0] == "UPLOAD":
             """ i dont have idea how to do this... yet"""
-            pass
+            response = "NOT IMPLEMENTED YET"
         elif nrc[0] == "DOWNLOAD":
             """ i dont have idea neither"""
-            pass
+            response = "NOT IMPLEMENTED YET"
         elif nrc[0] == "ENUMERATE":
             if platform.system() == "Linux":
                 # https://book.hacktricks.xyz/linux-hardening/linux-privilege-escalation-checklist
@@ -456,27 +459,26 @@ class NetRunnerServer:
                     "WFILES":self.nrc_engine_enumerate_Linux_writable_files,
                     "ALL":self.nrc_engine_enumerate_Linux
                 }
-                if len(nrc) > 1:  # linux $NRC ENUMERATE HELP MESSAGE
+                if len(nrc) > 1:  # calling a user specified linux enumeration module
                     try:
                         response = enumeration_modules[nrc[1]]()
                     except:
-                        response =  "$NRC ENUMERATE [SYSTEM|DRIVES |SOFTWARE|PROCESS|CRONJOBS|SERVICES]\n"
-                        response += "               [TIMER |SOCKETS|DBUS    |NETWORK|USERS   |WPATHS  |SUIDGUID]\n"
-                        response += "               [CAPAB |ACLS   |SHELLS  |SSH    |INTFILES|WFILES  | ALL]\n"
+                        # linux $NRC ENUMERATE HELP MESSAGE in case user specified user module doesnt exist
+                        response =  "---------------------------------------------------------------------\n"
+                        response += "$NRC ENUMERATE [ SYSTEM   | DRIVES | SOFTWARE  | PROCESS | CRONJOBS ]\n"
+                        response += "               [ SERVICES | TIMER  | SOCKETS   | DBUS    | NETWORK  ]\n"
+                        response += "               [ USERS    | WPATHS | SUIDGUID  | CAPAB   | ACLS     ]\n"
+                        response += "               [ SHELLS   | SSH    | INTFILES  | WFILES  | ALL      ]\n"
                         response += "               [default ALL]\n"
                 else:
-                    response = self.nrc_engine_enumerate_Linux()
+                    # calling all modules by default
+                    response = enumeration_modules("ALL")
             elif platform.system() == "Windows":
                 # https://book.hacktricks.xyz/windows-hardening/checklist-windows-privilege-escalation
                 #response = self.nrc_engine_enumerate_Windows()
                 response = "WINDOWS ENUMERATION NOT IMPLEMENTED YET"
-        elif nrc[0] == "KEYLOGGER":
-            pass
-        elif nrc[0] == "LOOT":
-            pass
         else:
             response = "INVALID NRC COMMAND, USE $NRC HELP" 
-
         return response 
 
     def nrc_engine_enumerate_Linux(self):
@@ -491,7 +493,7 @@ class NetRunnerServer:
         response += self.nrc_engine_enumerate_Linux_dbus()
         response += self.nrc_engine_enumerate_Linux_network()
         """
-        response += self.nrc_engine_enumerate_Linux_users()     + "\n"
+        response += self.nrc_engine_enumerate_Linux_users()     + "\n"NNN
         response += self.nrc_engine_enumerate_Linux_writable_paths() + "\n"
         response += self.nrc_engine_enumerate_Linux_SUID_GUID() + "\n"
         response += self.nrc_engine_enumerate_Linux_capabilites() + "\n"
@@ -1122,7 +1124,7 @@ class NetRunnerClient():
         while recv_len:
             data = self.socket.recv(64)
             recv_len = len(data)
-            response += data.decode()
+            response += data.decode("utf-8", "ignore")
             if recv_len < 64:
                 break        
         return response
@@ -1149,6 +1151,7 @@ if __name__ == "__main__":
 # TODO: LOOTing, descargar archivos con extension especifica
 # TODO: barra de carga mientras se espera respuesta del servidor
 # TODO: COmentar el codigo, de otra forma con el timepo no voy a entender ni m***da
+# TODO: Implementar paramiko o una forma de redireccion de puertos (SSH TUNNELING)
 
 ### FIXME
 # FIXME: Cuando se inicia una shell desde NRClient, no se puede navegar entre directorios
